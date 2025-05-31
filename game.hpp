@@ -107,11 +107,10 @@ typedef struct t_game
 	vector<int> FlyPosx;
 	vector<int> FlyPosy;
 	int currLife;
-	// Add these variables to the game class or global scope
-	int currentFrame = 0; // Track the current frame of the animation
-	int animationSpeed = 100; // Speed of animation (milliseconds per frame)
+	int currentFrame = 0; 
+	int animationSpeed = 100;
 	std::vector<vector<SDL_Texture *>> Animations[2];
-	std::vector<SDL_Texture *> playeridleAnimation; // Vector to store the player animation textures
+	std::vector<SDL_Texture *> playeridleAnimation; 
 	std::vector<SDL_Texture *> playeridleAnimationL;
 	std::vector<SDL_Texture *> RunRAnim;
 	std::vector<SDL_Texture *> RunLAnim;	
@@ -201,16 +200,16 @@ class Doors
 
 class Cooldown {
 private:
-    Uint32 lastActivationTime; // Time when the 'q' key was last pressed
+    Uint32 lastActivationTime; 
 	float sttime;		
 
 public:
     Cooldown(Uint32 starttime) : lastActivationTime(0), sttime(starttime) {}
 
     bool isReady() const {
-        Uint32 currentTime = SDL_GetTicks(); // Get the current time in milliseconds
-        float elapsedSeconds = (currentTime - lastActivationTime) / 1000.0f;// Calculate the elapsed time since the last press
-	  return elapsedSeconds >= 1.0f; // Return true if at least 1 second has passed since the last press
+        Uint32 currentTime = SDL_GetTicks(); 
+        float elapsedSeconds = (currentTime - lastActivationTime) / 1000.0f;
+	  return elapsedSeconds >= 1.0f; 
     }
     float getTime()
     {
@@ -220,7 +219,7 @@ public:
 
     }
     void activate() {
-        lastActivationTime = SDL_GetTicks(); // Set the activation time to the current time
+        lastActivationTime = SDL_GetTicks(); 
     }
 };
 

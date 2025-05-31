@@ -1013,6 +1013,11 @@ void moreEvents(game *info, Render *wind)
 
 		if (info->chest2.Sattack)
 		{	
+			
+			static Cooldown qCooldown(1000);
+			qCooldown.activate();
+			printf("Cooldown elapsed time: %.2f seconds\n", qCooldown.getTime());
+			printf("Cooldown is ready? %s\n", qCooldown.isReady() ? "YES" : "NO");
 			static int cast = 40;
 			static int spell;
 			static int i = 3;
@@ -1455,15 +1460,6 @@ int main(int ac, char **av)
 	game.MagickAnimR.push_back(wind.loadTexture("img/pl/right/magick_base/hits-3-5.png"));
 	
 	
-
-
-
-
-
-
-
-
-
 
 
 	int totx = (640 * 2) / 64;
