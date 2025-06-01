@@ -5,6 +5,17 @@
 
 using namespace std;
 
+
+struct Projectile {
+    int x, y;
+    int cast = 0;
+    bool hit = false;
+    int frame = 0;
+    int frameDelay = 0;
+    bool directionRight;  
+};
+
+
 void LFProp(game *info)
 {
 	map<int, bool>::iterator it = info->PropPos.begin();
@@ -15,6 +26,7 @@ void LFProp(game *info)
 			if (info->pposx > it->first - 64 && info->pposx < it->first)
 			{	
 				info->CurrentProp = it->first;
+				info->PropCoord.insert(std::make_pair(it->first, 0));
 				break ;
 			}
 		}
@@ -23,6 +35,7 @@ void LFProp(game *info)
 			if (info->pposx - 64  < it->first && (info->pposy >= it->first - 64 && info->pposy <= it->first))
 			{
 				info->CurrentProp = it->first;
+				info->PropCoord[it->first] = info->pposy; 
 				break ;
 			}
 		}
@@ -49,7 +62,7 @@ void renderDestroyables(game *game, Render *wind)
 	for (; it != game->PropPos.end(); it++, k++)
 	{
 		if (!it->second)
-			wind->renderTexture(*k, it->first, it->first);
+			wind->renderTexture(*k, it->first, it->first, false);
 		else
 		{
 			game->PropPos.erase(it);
@@ -76,9 +89,9 @@ void renderFlyEnemies(game *game, Render *wind, int i)
 		if (game->currLife == 0)
 			exit(printf("GAME OVER\n"));
 		if (game->Fly_left)
-		wind->renderTexture(game->FlyingEnR[i], *it, *ite);
+		wind->renderTexture(game->FlyingEnR[i], *it, *ite, false);
 		else
-		wind->renderTexture(game->FlyingEnL[i], *it, *ite);
+		wind->renderTexture(game->FlyingEnL[i], *it, *ite, false);
 		
 		if (*it > game->pposx + 64 && *it < game->pposx)
 		{
@@ -144,30 +157,30 @@ void renderStartingWeapon(game *game, Render *wind, Chest &chest1, SDL_KeyboardE
 		if (i < 30)
 		{
 			if (i % 2 == 0)
-			wind->renderTexture(chest1.ChestClosed[0], 348, 380);
+			wind->renderTexture(chest1.ChestClosed[0], 348, 380, false);
 			else
-			wind->renderTexture(chest1.ChestClosed[0], 352, 380);
+			wind->renderTexture(chest1.ChestClosed[0], 352, 380, false);
 
 		}
 		i++;
 		if (i >= 30 && i <= 40)
-		wind->renderTexture(chest1.ChestClosed[8], 352, 380);
+		wind->renderTexture(chest1.ChestClosed[8], 352, 380, false);
 		if (i >= 41 && i <= 44)
 		{
 			static int lol;
-			wind->renderTexture(game->Sprinkle[lol], 352, 380);
-			wind->renderTexture(game->Sprinkle[lol], 352, 380);	
-			wind->renderTexture(game->Sprinkle[lol], 352, 380);
+			wind->renderTexture(game->Sprinkle[lol], 352, 380, false);
+			wind->renderTexture(game->Sprinkle[lol], 352, 380, false);	
+			wind->renderTexture(game->Sprinkle[lol], 352, 380, false);
 			lol++;
 		}
 		if (i >= 45)
 		{
-			wind->renderTexture(game->Smoke[k], 342, 360);
+			wind->renderTexture(game->Smoke[k], 342, 360, false);
 			k++;
 			if (k == 19)
 				k = 0;
 
-			wind->renderTexture(game->base_sword, 350, 400);
+			wind->renderTexture(game->base_sword, 350, 400, false);
 			game->picked = false;
 		}
 	}
@@ -184,30 +197,30 @@ void renderStartingWeapon2(game *game, Render *wind, Chest &chest1, SDL_Keyboard
 		if (i < 30)
 		{
 			if (i % 2 == 0)
-			wind->renderTexture(chest1.ChestClosed[0], 548, 380);
+			wind->renderTexture(chest1.ChestClosed[0], 548, 380, false);
 			else
-			wind->renderTexture(chest1.ChestClosed[0], 552, 380);
+			wind->renderTexture(chest1.ChestClosed[0], 552, 380, false);
 
 		}
 		i++;
 		if (i >= 30 && i <= 40)
-		wind->renderTexture(chest1.ChestClosed[8], 552, 380);
+		wind->renderTexture(chest1.ChestClosed[8], 552, 380, false);
 		if (i >= 41 && i <= 44)
 		{
 			static int lol;
-			wind->renderTexture(game->Sprinkle[lol], 552, 380);
-			wind->renderTexture(game->Sprinkle[lol], 552, 380);	
-			wind->renderTexture(game->Sprinkle[lol], 552, 380);
+			wind->renderTexture(game->Sprinkle[lol], 552, 380, false);
+			wind->renderTexture(game->Sprinkle[lol], 552, 380, false);	
+			wind->renderTexture(game->Sprinkle[lol], 552, 380, false);
 			lol++;
 		}
 		if (i >= 45)
 		{
-			wind->renderTexture(game->SmokeG[k], 510, 290);
+			wind->renderTexture(game->SmokeG[k], 510, 290, false);
 			k++;
 			if (k == 19)
 				k = 0;
 
-			wind->renderTexture(game->base_wand, 550, 400);
+			wind->renderTexture(game->base_wand, 550, 400, false);
 			game->chest2.picked = false;
 		}
 	}
@@ -216,28 +229,39 @@ void renderStartingWeapon2(game *game, Render *wind, Chest &chest1, SDL_Keyboard
 
 void renderThings(game *game, int Tf, SDL_Texture *currentTexture, Render *wind, int fps, Doors door1, Chest &chest1, SDL_KeyboardEvent *event)
 {
-	wind->renderTexture(currentTexture, game->pposx, game->pposy);
-	wind->renderTexture(game->HealthBar[game->currLife], 0, 0);
-	wind->renderTexture(game->TorchAnim[Tf], 430, 0);
-	wind->renderTexture(game->TorchAnim[Tf], 530, 0);
-	wind->renderTexture(game->TorchAnim[Tf], 530, 898);
-	wind->renderTexture(game->TorchAnim[Tf], 130, 898);
-	wind->renderTexture(game->Props[0], 480, 8);
+	bool magickAnim = (currentTexture == game->MagickAnimR[0] ||
+                   currentTexture == game->MagickAnimR[1] ||
+                   currentTexture == game->MagickAnimR[2]);
+
+	if (game->left && magickAnim)
+	{
+		wind->renderTexture(currentTexture, game->pposx, game->pposy, true);
+	}
+	else
+	{
+		wind->renderTexture(currentTexture, game->pposx, game->pposy, false);
+	}
+	wind->renderTexture(game->HealthBar[game->currLife], 0, 0, false);
+	wind->renderTexture(game->TorchAnim[Tf], 430, 0, false);
+	wind->renderTexture(game->TorchAnim[Tf], 530, 0, false);
+	wind->renderTexture(game->TorchAnim[Tf], 530, 898, false);
+	wind->renderTexture(game->TorchAnim[Tf], 130, 898, false);
+	wind->renderTexture(game->Props[0], 480, 8, false);
 
 	if (door1.getLock())
-		wind->renderTexture(door1.DoorLocked[0], 580, 0);
+		wind->renderTexture(door1.DoorLocked[0], 580, 0, false);
 	if (!chest1.isOpen())
 	{
 		static int l;
 		static int ll;
 		if (ll < 100)
 		{
-			wind->renderTexture(chest1.ChestClosed[0], 350, 380);
+			wind->renderTexture(chest1.ChestClosed[0], 350, 380, false);
 			ll++;
 		}
 		else
 		{
-			wind->renderTexture(chest1.ChestClosed[l], 350, 380);
+			wind->renderTexture(chest1.ChestClosed[l], 350, 380, false);
 			l++;
 			if (l == chest1.ChestClosed.size() - 1)
 			{
@@ -252,12 +276,12 @@ void renderThings(game *game, int Tf, SDL_Texture *currentTexture, Render *wind,
 		static int ll;
 		if (ll < 100)
 		{
-			wind->renderTexture(chest1.ChestClosed[0], 550, 380);
+			wind->renderTexture(chest1.ChestClosed[0], 550, 380, false);
 			ll++;
 		}
 		else
 		{
-			wind->renderTexture(chest1.ChestClosed[l], 550, 380);
+			wind->renderTexture(chest1.ChestClosed[l], 550, 380, false);
 			l++;
 			if (l == chest1.ChestClosed.size() - 1)
 			{
@@ -271,7 +295,7 @@ void renderThings(game *game, int Tf, SDL_Texture *currentTexture, Render *wind,
 	{
 		
 		static int k;
-		wind->renderTexture(game->Explosion[k], game->PropToDes, game->PropToDes);
+		wind->renderTexture(game->Explosion[k], game->PropToDes, game->PropToDes, false);
 		k++;
 		if (k == 7)
 		{
@@ -288,35 +312,35 @@ void renderThings(game *game, int Tf, SDL_Texture *currentTexture, Render *wind,
 	renderDestroyables(game, wind);
 	renderFlyEnemies(game, wind, fps);
 	if (game->fSwordMSG)
-		wind->renderTexture(game->firstSwordMSG, 350 , 450); 
+		wind->renderTexture(game->firstSwordMSG, 350 , 450, false); 
 	//CHEST 2
 	if (game->chest2.WeaponMSG)
-		wind->renderTexture(game->firstWandMSG, 350 , 450);
+		wind->renderTexture(game->firstWandMSG, 350 , 450, false);
 	if (game->choice)
 	{
 		if (game->currchoice == 0)
-		wind->renderTexture(game->AcceptW, 350 , 450);
+		wind->renderTexture(game->AcceptW, 350 , 450, false);
 		else
-		wind->renderTexture(game->RefuseW, 350, 450);
+		wind->renderTexture(game->RefuseW, 350, 450, false);
 	}
 	//CHEST 2
 	if (game->chest2.choice)
 	{
 		if (game->chest2.currchoice == 0)
-		wind->renderTexture(game->AcceptW, 350 , 450);
+		wind->renderTexture(game->AcceptW, 350 , 450, false);
 		else
-		wind->renderTexture(game->RefuseW, 350, 450);
+		wind->renderTexture(game->RefuseW, 350, 450, false);
 	}
 	if (game->YouRecived)
 	{
 		game->overhead = true;
-		wind->renderTexture(game->RecRustySword, 350, 450);
+		wind->renderTexture(game->RecRustySword, 350, 450, false);
 	}
 	//CHEST 2
 	if (game->chest2.YouRecived)
 	{
 		game->chest2.overhead = true;
-		wind->renderTexture(game->RecOldRod, 350, 450);
+		wind->renderTexture(game->RecOldRod, 350, 450, false);
 	} 
 	if (game->overhead)
 	{	
@@ -328,12 +352,12 @@ void renderThings(game *game, int Tf, SDL_Texture *currentTexture, Render *wind,
 		if (game->left)
 		{
 			SDL_SetTextureAlphaMod(game->RoverL, o);
-				wind->renderTexture(game->RoverR, game->pposx, game->pposy - 60);	
+				wind->renderTexture(game->RoverR, game->pposx, game->pposy - 60, false);	
 		}
 		else
 		{
 			SDL_SetTextureAlphaMod(game->RoverR, o);
-			wind->renderTexture(game->RoverL, game->pposx, game->pposy - 60);
+			wind->renderTexture(game->RoverL, game->pposx, game->pposy - 60, false);
 		}
 
 		if (o <= 0)
@@ -342,105 +366,193 @@ void renderThings(game *game, int Tf, SDL_Texture *currentTexture, Render *wind,
 
 }
 
+void Collisions(game *info, std::vector<Projectile>& projectiles)
+{
+    // Teletrasporto
+    if (info->pposx >= 525 && info->pposx <= 640 && info->pposy >= 0 && info->pposy <= 64)
+    {
+        int step = info->running ? 16 : 8;
+        info->pposx += (info->pposx <= 528) ? -step : step;
+        info->pposy += step;
+    }
+
+    // Chest 1
+    if (info->pposx >= 300 && info->pposx <= 400 && info->pposy >= 350 && info->pposy <= 435 && !info->W_equipped)
+    {
+        if (!info->chest1open)
+            info->Chest1Area = true;
+        else
+            info->SwordArea = true;
+
+        int step = info->running ? 16 : 8;
+        info->pposx += (info->pposx <= 305) ? -step : (info->pposx >= 400) ? step : 0;
+        info->pposy += (info->pposy >= 400 && info->pposy <= 440) ? step : (info->pposy >= 344) ? -step : 0;
+    }
+    else if (info->pposx < 280 || info->pposx > 420 || info->pposy < 330 || info->pposy > 455)
+    {
+        info->Chest1Area = false;
+    }
+
+    // Chest 2
+    if (info->pposx >= 500 && info->pposx <= 600 && info->pposy >= 350 && info->pposy <= 435 && !info->chest2.W_equipped)
+    {
+        if (!info->chest2.isOpen())
+            info->chest2.ChestArea = true;
+        else
+            info->chest2.WeaponArea = true;
+
+        int step = info->running ? 16 : 8;
+        info->pposx += (info->pposx <= 505) ? -step : (info->pposx >= 600) ? step : 0;
+        info->pposy += (info->pposy >= 400 && info->pposy <= 440) ? step : (info->pposy >= 344) ? -step : 0;
+    }
+    else if (info->pposx < 480 || info->pposx > 620 || info->pposy < 330 || info->pposy > 455)
+    {
+        info->chest2.ChestArea = false;
+    }
+
+    // Collisioni proiettili
+    for (auto& p : projectiles)
+    {
+        if (p.hit) continue; 
+
+        int px = p.x + p.cast;
+        int py = p.y;
+
+
+		int totx = (640 * 2);
+		int toty = (480 * 2);
+        bool hitWall = (px < 0 || px >= totx - 70 || py < 0 || py > toty);
+        if (hitWall)
+        {
+            p.hit = true;
+            p.frame = 7;
+            p.frameDelay = 0;
+            continue; 
+        }
+
+        bool chest1Closed = !info->chest1open && (px >= 300 && px <= 400 && py >= 350 && py <= 435);
+        bool chest2Closed = !info->chest2.isOpen() && (px >= 500 && px <= 600 && py >= 350 && py <= 435);
+
+
+        bool hitFly = false;
+        {
+            auto itx = info->FlyPosx.begin();
+            auto ity = info->FlyPosy.begin();
+            for (; itx != info->FlyPosx.end() && ity != info->FlyPosy.end(); ++itx, ++ity)
+            {
+                int flyx = *itx;
+                int flyy = *ity;
+                if (abs(px - flyx) <= 20 && abs(py - flyy) <= 20)
+                {
+                    hitFly = true;
+					info->FlyLightHit = true;
+                    break;
+                }
+            }
+        }
+
+        if (chest1Closed || chest2Closed || hitFly)
+        {
+            p.hit = true;
+            p.frame = 7;
+            p.frameDelay = 0;
+            continue;
+        }
+
+
+		hitWall = (px < 0 || px >= totx - 70 || py < 0 || py > toty);
+
+        if (hitWall)
+        {
+            p.hit = true;
+            p.frame = 7;
+            p.frameDelay = 0;
+            continue;
+        }
+    }
+	for (auto& p : projectiles)
+	{
+		if (p.hit) continue;
+
+		int px = p.x + p.cast;  
+		int py = p.y;           
+
+		const int radius = 60;
+		const int radiusSquared = radius * radius;
+
+		for (const auto& prop : info->PropCoord)  
+		{
+			int dx = px - prop.first;
+			int dy = py - prop.second;
+
+			int distSquared = dx * dx + dy * dy;
+
+			if (distSquared <= radiusSquared)
+			{
+				p.hit = true;
+				p.frame = 7;
+				p.frameDelay = 0;
+				break;
+			}
+		}
+	}
+}
+
 
 void Collisions(game *info)
-{ 
-
-	if (info->pposx >= 525 && info->pposx <= 640 && info->pposy >= 0 && info->pposy <= 64)
-	{
-		if (!info->running)
-		{
-			if (info->pposx <= 528)
-				info->pposx -= 8;
-			else if (info->pposx >= 640)
-				info->pposx += 8;
-			if (info->pposy <= 64)
-				info->pposy += 8;
-		}
-		else
-		{
-			if (info->pposx <= 528)
-				info->pposx -= 16;
-			else if (info->pposx >= 640)
-				info->pposx += 16;
-			if (info->pposy <= 64)
-				info->pposy += 16;
-		}
-	}
-	if (info->pposx >= 300 && info->pposx <= 400 && info->pposy >= 350 && info->pposy <= 435 && !info->W_equipped)
-	{	
-		if (!info->chest1open)
-			info->Chest1Area = true;
-		else
-		info->SwordArea = true;
-		if (!info->running)
-		{
-			if (info->pposx <= 305)
-				info->pposx -= 8;
-			else if (info->pposx >= 400)
-				info->pposx += 8;
-			if (info ->pposy >= 400 && info->pposy <= 440)
-				info->pposy += 8;
-			else if (info->pposy >= 344)
-				info->pposy -= 8;
-		}
-		else
-		{
-			if (info->pposx <= 305)
-				info->pposx -= 16;
-			else if (info->pposx >= 400)
-				info->pposx += 16;
-			if (info ->pposy >= 400 && info->pposy <= 440)
-				info->pposy += 16;
-			else if (info->pposy >= 334)
-				info->pposy -= 16;
-		}
-
-	}
-	else if ( info->pposx < 280 || info->pposx > 420 || info->pposy < 330 || info->pposy > 455)
-	info->Chest1Area = false;
-
-
-
-	if (info->pposx >= 500 && info->pposx <= 600 && info->pposy >= 350 && info->pposy <= 435 && !info->chest2.W_equipped)
-	{	
-		if (!info->chest2.isOpen())
-			info->chest2.ChestArea = true;
-		else
-		info->chest2.WeaponArea = true;
-		if (!info->running)
-		{
-			if (info->pposx <= 505)
-				info->pposx -= 8;
-			else if (info->pposx >= 600)
-				info->pposx += 8;
-			if (info ->pposy >= 400 && info->pposy <= 440)
-				info->pposy += 8;
-			else if (info->pposy >= 344)
-				info->pposy -= 8;
-		}
-		else
-		{
-			if (info->pposx <= 505)
-				info->pposx -= 16;
-			else if (info->pposx >= 600)
-				info->pposx += 16;
-			if (info ->pposy >= 400 && info->pposy <= 440)
-				info->pposy += 16;
-			else if (info->pposy >= 334)
-				info->pposy -= 16;
-		}
-
-	}
-	else if ( info->pposx < 480 || info->pposx > 620 || info->pposy < 330 || info->pposy > 455)
-	info->chest2.ChestArea = false;
-	
-
+{
+	static std::vector<Projectile> dummy;
+	Collisions(info, dummy);
 }
+
+
+void wand_anim(game *info, SDL_Texture **currentTexture)
+{
+	static Cooldown attack_cd(1000);
+	static bool attack_anim_active = false;
+	static int i = 0;
+
+	if (!info->wand_cd && info->chest2.attack && info->idle)
+	{
+		attack_cd.activate();
+		info->wand_cd = true;
+		attack_anim_active = true;
+
+		i = 0;
+	}
+	if (attack_anim_active)
+	{
+		if (i == 10) {
+			info->launch = true;
+			info->chest2.attack = false;
+			info->fixedpos = info->pposy;
+		}
+		
+		if (attack_cd.getTime() >= 0.5 && i > 10) {
+			attack_anim_active = false;
+			info->wand_cd = false;
+			attack_cd.reset();
+			i = 0;
+			return;
+		}
+		else {
+			if (i < 3)
+				*currentTexture = info->MagickAnimR[i];
+			else if (i >= 4 && i <= 9)
+				*currentTexture = info->MagickAnimR[2];
+
+			i++;
+		}
+	}
+	else
+	{
+		return;
+	}
+}
+
 
 SDL_Texture*Animations(SDL_Texture *currentTexture, game *info, int currentFrame, int &as)
 {	
-	
 
 	bool colliding = false;
 	static int tookDmg;
@@ -641,29 +753,15 @@ SDL_Texture*Animations(SDL_Texture *currentTexture, game *info, int currentFrame
 	}
 	else
 		SDL_SetTextureAlphaMod(currentTexture,  255);
-
 	if (info->chest2.W_equipped)
 	{
-		if (info->chest2.attack)
-		{	
-			static int i;
- 			if (i == 10)
-			{
-				info->launch = true;
-				i = 0; 
-			}
-			if (i < 3)	
-				currentTexture = info->MagickAnimR[i];
-			if (i >= 4 && i <= 9)
-				currentTexture = info->MagickAnimR[2];
-			i++;
-			 
-		}
+		wand_anim(info, &currentTexture);
 	}
 
 	return (currentTexture);
 
 }
+
 
 void PopUpMSG(game *info, Render *wind, SDL_KeyboardEvent* event)
 {
@@ -673,7 +771,7 @@ void PopUpMSG(game *info, Render *wind, SDL_KeyboardEvent* event)
 }
 
 
-void 	pickWeaponLogickp2(game *info, SDL_KeyboardEvent *event, Render *wind)
+void pickWeaponLogickp2(game *info, SDL_KeyboardEvent *event, Render *wind)
 {
 	if (info->chest2.choice)
 	{
@@ -805,7 +903,7 @@ void pickWeaponLogick(game *info, SDL_KeyboardEvent *event, Chest &chest1, Rende
 }
 
 
-void WandAttack(game *info, SDL_KeyboardEvent* event, const Uint8 *currentKeyState, Uint32 &spaceKeyDownTime, float elapsedSeconds, Uint32 currentTime)
+void WandAttack(game *info, SDL_KeyboardEvent* event, const Uint8 *currentKeyState, Uint32 &spaceKeyDownTime, float elapsedSeconds, Uint32 currentTime, SDL_Texture * currentTexture)
 {
 	if (event->keysym.sym == SDLK_SPACE && info->chest2.W_equipped) 
 	{
@@ -817,7 +915,7 @@ void WandAttack(game *info, SDL_KeyboardEvent* event, const Uint8 *currentKeySta
 		} 
 		else 
 		{	
-			if (elapsedSeconds < 1 && currentTime / 1000.0f > 1)
+			if (elapsedSeconds < 1 && currentTime / 1000.0f > 1  && info->launch && info->idle)
 			{	
 				info->chest2.Sattack = true;
 				info->fixedpos = info->pposy;
@@ -826,7 +924,8 @@ void WandAttack(game *info, SDL_KeyboardEvent* event, const Uint8 *currentKeySta
 			}
 			else
 			{
-				info->chest2.attack = true;
+				if (!info->wand_cd)
+					info->chest2.attack = true;
 				spaceKeyDownTime = 0;
 				elapsedSeconds = 0;
 			} 
@@ -839,7 +938,7 @@ void WandAttack(game *info, SDL_KeyboardEvent* event, const Uint8 *currentKeySta
 }
 
 
-void manageKEYBOARD(SDL_KeyboardEvent* event, Render* wind, game* info, int& animationSpeed, Chest &chest1) 
+void manageKEYBOARD(SDL_KeyboardEvent* event, Render* wind, game* info, int& animationSpeed, Chest &chest1, SDL_Texture * currentTexture) 
 {
 const Uint8* currentKeyState = SDL_GetKeyboardState(nullptr);
 static Uint32 spaceKeyDownTime = 0; // Track the time when the space key was pressed
@@ -955,7 +1054,7 @@ if (event->type == SDL_KEYDOWN) {
 		}
 	}
 	pickWeaponLogick(info, event, chest1, wind);
-	WandAttack(info, event, currentKeyState, spaceKeyDownTime, elapsedSeconds, currentTime);
+	WandAttack(info, event, currentKeyState, spaceKeyDownTime, elapsedSeconds, currentTime, currentTexture);
 	if (currentKeyState[SDL_SCANCODE_LSHIFT]) {
 		animationSpeed = 60;
 		info->running = true;
@@ -996,7 +1095,6 @@ if (event->type == SDL_KEYUP) {
 	info->idle = true;
 	info->running = false;
 	info->attack = false;
-	info->chest2.attack = false;
 	animationSpeed = 70;
 	info->Sattack = false;
 	info->Hattk = false;
@@ -1005,42 +1103,56 @@ if (event->type == SDL_KEYUP) {
 }
 
 
-void moreEvents(game *info, Render *wind)
+void moreEvents(game *info, Render *wind, SDL_Texture * currentTexture)
 {
-	 // STAFF ATTACK
-	if (info->chest2.W_equipped)
-	{	
+    static std::vector<Projectile> projectiles;
 
-		if (info->chest2.Sattack)
-		{	
-			
-			static Cooldown qCooldown(1000);
-			qCooldown.activate();
-			printf("Cooldown elapsed time: %.2f seconds\n", qCooldown.getTime());
-			printf("Cooldown is ready? %s\n", qCooldown.isReady() ? "YES" : "NO");
-			static int cast = 40;
-			static int spell;
-			static int i = 3;
-				if (cast == 40)
-					wind->renderTexture(info->MagickAnimR[i], info->pposx + cast, info->pposy + 10);
-				else
-					wind->renderTexture(info->MagickAnimR[i], info->pposx + cast, info->fixedpos + 10);	
-				cast += 25;
-				if (i >= 6 && cast > 300)
-					i = 3;
-				if (i < 6)
-					i++;	
-				if (cast > 1000)
-				{
-						cast = 50;
-						info->chest2.Sattack = false;
-						info->launch = false;
-				}
-		}
-	}
+    if (info->chest2.W_equipped)
+    {
+        if (info->launch)
+        {
+			projectiles.push_back({info->pposx, info->pposy, 0, false, 3, 0, !info->left});
+            info->launch = false;
+        }
+
+        for (size_t idx = 0; idx < projectiles.size(); )
+        {
+            auto& p = projectiles[idx];
+
+            int animFrame;
+            if (p.hit)
+                animFrame = std::min(p.frame, 11);
+            else
+                animFrame = 3 + ((p.frame - 3) % 4);
+
+            wind->renderTexture(info->MagickAnimR[animFrame], p.x + p.cast, p.y + 10, !p.directionRight);
+
+            p.frameDelay++;
+            if (p.frameDelay >= 2) {
+                p.frame++;
+                p.frameDelay = 0;
+            }
+
+            if (!p.hit)
+            {
+
+                if (p.directionRight)
+                    p.cast += 25;  
+                else
+                    p.cast -= 25; 
+            }
+
+            if ((p.hit && p.frame > 11) || (!p.hit && (p.cast > 1500 || p.cast < -1500)))
+                projectiles.erase(projectiles.begin() + idx);
+            else
+                ++idx;
+        }
+
+        Collisions(info, projectiles);
+    }
 }
 
-void checkForEvents(game *info, Render *wind, int &As)
+void checkForEvents(game *info, Render *wind, int &As, SDL_Texture * currentTexture)
 {
 	map<int, bool>::iterator it = info->PropPos.begin();
 	map<int, bool>::iterator i = info->PropPos.find(info->CurrentProp);
@@ -1086,7 +1198,7 @@ void checkForEvents(game *info, Render *wind, int &As)
 		info->FlyPosy.push_back(RanGen(0, 960));
 		static int k;
 		if (k > 0)
-		wind->renderTexture(info->FlyDeath[k], info->currFlyingX, info->currFlyingY);
+		wind->renderTexture(info->FlyDeath[k], info->currFlyingX, info->currFlyingY, false);
 		k++;
 		if (k == info->FlyDeath.size())
 		{	
@@ -1094,7 +1206,7 @@ void checkForEvents(game *info, Render *wind, int &As)
 			k = 0;
 		}
 	}
-	moreEvents(info, wind);
+	moreEvents(info, wind, currentTexture);
 }
 
 int main(int ac, char **av)
@@ -1172,11 +1284,13 @@ int main(int ac, char **av)
 	game.currLife = 5;
 	game.fixedpos = 2000;
 	game.launch = false;
+	game.wand_cd = false;
 
 
 	// PROP POSITION INSERT
 	game.PropPos.insert(make_pair(game.randProp, false));
 	game.PropPos.insert(make_pair(rand2, false));
+	game.PropCoord.insert(make_pair(0, 0));
 
 //LOAD Hurt frame
 	game.Hurt.push_back(wind.loadTexture("img/pl/right/hurt1.png"));
@@ -1573,10 +1687,13 @@ while (accumulator >= timeStep)
 
 		if (event.type == SDL_KEYDOWN)
 		{
-			manageKEYBOARD(&event.key, &wind, &game, animationSpeed, chest1);
+			if (!game.chest2.attack)
+				manageKEYBOARD(&event.key, &wind, &game, animationSpeed, chest1, currentTexture);
 		}
 		if (event.type == SDL_KEYUP)
-			manageKEYBOARD(&event.key, &wind, &game, animationSpeed, chest1);
+		{
+			manageKEYBOARD(&event.key, &wind, &game, animationSpeed, chest1, currentTexture);
+		}
 	}
 	accumulator -= timeStep;
 }
@@ -1586,7 +1703,7 @@ wind.clear();
 currentTexture = Animations(currentTexture, &game, currentFrame, animationSpeed);
 wind.drawMap(p, wind);
 renderThings(&game, TorchFrame, currentTexture, &wind, currentFrame, door1, chest1, &event.key);
-checkForEvents(&game, &wind, animationSpeed);
+checkForEvents(&game, &wind, animationSpeed, currentTexture);
 	
 	// QUICKATTACK & PRESSEDATTACK LOGIC
 
@@ -1595,7 +1712,7 @@ if (game.Sattack && !game.running && !game.moveDown && !game.moveLeft && !game.m
 	if (!game.left)
 	{
 		currentTexture = game.AttackRAnim[AtFr];
-		wind.renderTexture(currentTexture, game.pposx + (currentFrame * 2 + 80),  game.pposy + (currentFrame + 3));
+		wind.renderTexture(currentTexture, game.pposx + (currentFrame * 2 + 80),  game.pposy + (currentFrame + 3), false);
 
 		vector<int>::iterator i = game.FlyPosx.begin();
 		vector<int>::iterator it = game.FlyPosy.begin();
@@ -1635,7 +1752,7 @@ if (game.Sattack && !game.running && !game.moveDown && !game.moveLeft && !game.m
 			else
 			game.BatD = false;
 		}
-		wind.renderTexture(currentTexture, game.pposx - (currentFrame * 2 + 66),  game.pposy - (currentFrame - 9));
+		wind.renderTexture(currentTexture, game.pposx - (currentFrame * 2 + 66),  game.pposy - (currentFrame - 9), false);
 		AtFrl++;
 		if (AtFrl == 5)
 			AtFrl = 2;
@@ -1651,7 +1768,7 @@ if (game.Release && game.idle && game.W_equipped)
 	{
 		game.CurrentAttack = true;
 		currentTexture = game.Heavy[AtFrR];
-		wind.renderTexture(currentTexture, game.pposx + (AtFrR  * 2 + 128), game.pposy + (AtFrR  - 23));
+		wind.renderTexture(currentTexture, game.pposx + (AtFrR  * 2 + 128), game.pposy + (AtFrR  - 23), false);
 		AtFrR++;
 		if (AtFrR == 11)
 		{
@@ -1665,7 +1782,7 @@ if (game.Release && game.idle && game.W_equipped)
 	{	
 		game.CurrentAttack = true;
 		currentTexture = game.HeavyL[AtFrLL];
-		wind.renderTexture(currentTexture, game.pposx -(AtFrLL * 2  + 128), game.pposy + (AtFrLL * 2 - 23));
+		wind.renderTexture(currentTexture, game.pposx -(AtFrLL * 2  + 128), game.pposy + (AtFrLL * 2 - 23), false);
 		AtFrLL++;
 		if (AtFrLL == 11)
 		{

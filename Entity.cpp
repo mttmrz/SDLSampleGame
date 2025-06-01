@@ -12,7 +12,7 @@ Entity::Entity()
 {
 	return ;
 }
-float Entity::getX()
+float Entity::getX() 
 {
 	return this->x;
 }

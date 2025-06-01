@@ -79,6 +79,7 @@ typedef struct t_game
 	bool YouRecived;
 	bool overhead;
 	bool launch;
+	bool wand_cd;
 
 	int currchoice;
 	int fixedpos;
@@ -133,6 +134,8 @@ typedef struct t_game
 	vector<SDL_Texture *> MagickAnimR;
 	vector<SDL_Texture *> MagickAnimL;	
 	map<int, bool> PropPos;
+	map<int, int>PropCoord;
+	bool want_atk = false;
 	
 } game;
 
@@ -150,7 +153,7 @@ class Render
 	void clear();
 	void render(Entity &ent);
 	void display();
-	void renderTexture(SDL_Texture* texture, int x, int y);
+	void renderTexture(SDL_Texture* texture, int x, int y, bool left);
 	void moveright(game *info, Entity p);
 	void moveleft(game *info, Entity p);
 	void movedown(game *info, Entity p);
@@ -221,6 +224,10 @@ public:
     void activate() {
         lastActivationTime = SDL_GetTicks(); 
     }
+	void reset()
+	{
+		this->lastActivationTime = 0;
+	}
 };
 
 #endif

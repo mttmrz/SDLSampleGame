@@ -71,7 +71,7 @@ void Render::render(Entity &en)
 	SDL_RenderCopy(renderer, en.getTex(), &src, &dst);
 }
 
-void Render::renderTexture(SDL_Texture* texture, int x, int y)
+void Render::renderTexture(SDL_Texture* texture, int x, int y, bool left)
 {
     SDL_Rect destRect;
     destRect.x = x;
@@ -79,7 +79,14 @@ void Render::renderTexture(SDL_Texture* texture, int x, int y)
     
 
     SDL_QueryTexture(texture, NULL, NULL, &destRect.w, &destRect.h);
-    SDL_RenderCopy(renderer, texture, NULL, &destRect);
+	if (left)
+	{
+		SDL_RenderCopyEx(renderer, texture, NULL, &destRect, 0, NULL, SDL_FLIP_HORIZONTAL);
+	}
+	else
+	{
+		SDL_RenderCopy(renderer, texture, NULL, &destRect);
+	}
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 }
 
