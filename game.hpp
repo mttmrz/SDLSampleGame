@@ -63,6 +63,9 @@ typedef struct t_game
 	bool left;
 	bool Hattk;
 	bool Release;
+	bool Release_Wand;
+	bool Hattak2_Wand;
+	bool Hattk_Wand;
 	bool Hattak2;
 	bool CurrentAttack;
 	bool destroyed;
@@ -79,6 +82,7 @@ typedef struct t_game
 	bool YouRecived;
 	bool overhead;
 	bool launch;
+	bool launch_heavy;
 	bool wand_cd;
 
 	int currchoice;
@@ -127,15 +131,26 @@ typedef struct t_game
 	vector<SDL_Texture *>FlyingEnR;
 	vector<SDL_Texture *>FlyingEnL;
 	vector<SDL_Texture *> Hurt;
+	vector<SDL_Texture *> HurtL;
 	vector<SDL_Texture * > FlyDeath;
 	vector<SDL_Texture *> Smoke;
 	vector<SDL_Texture *> SmokeG;
 	vector<SDL_Texture *> Sprinkle;
 	vector<SDL_Texture *> MagickAnimR;
 	vector<SDL_Texture *> MagickAnimL;	
+	vector<SDL_Texture *> Projectile_Heavy;	
+	vector<SDL_Texture *> Heavy_Explosion;	
+	vector<SDL_Texture *> key;
+	SDL_Texture * full_black = nullptr;
+	SDL_Texture * lastTextureRendered = nullptr;
 	map<int, bool> PropPos;
 	map<int, int>PropCoord;
 	bool want_atk = false;
+	bool show_key = false;
+	bool key_picked = false;
+	bool on_the_door = false;
+	bool door_opened = false;
+	bool demo_end = false;
 	
 } game;
 
@@ -145,6 +160,8 @@ class Render
 	Render(const char * p_title, int p_w, int p_h);
 	~Render();
 	SDL_Texture *loadTexture(const char *fpath);
+	SDL_Renderer* getRenderer();
+	SDL_Texture* getCurrentBuffer();
 	 
 
 	int getRefreshRate();
@@ -153,7 +170,8 @@ class Render
 	void clear();
 	void render(Entity &ent);
 	void display();
-	void renderTexture(SDL_Texture* texture, int x, int y, bool left);
+	void renderTexture(SDL_Texture* texture, int x, int y, bool left, game *info);
+	void renderTexture(SDL_Texture* texture, int x, int y, bool left, game* info, float scaleX, float scaleY);
 	void moveright(game *info, Entity p);
 	void moveleft(game *info, Entity p);
 	void movedown(game *info, Entity p);

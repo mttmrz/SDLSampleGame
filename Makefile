@@ -1,11 +1,12 @@
 NAME = ELPEPE
-FLAGS = -lSDL2main -lSDL2 -lSDL2_image -g
+FLAGS = -lSDL2main -lSDL2 -lSDL2_image -lSDL2_ttf -g
+INCLUDES = -I./SDL2
 
 all: fclean_spec $(NAME)
 
 $(NAME):
 	@echo "Compiling..."
-	@g++ *.cpp $(FLAGS)  -o $(NAME) 
+	@g++ *.cpp $(INCLUDES) $(FLAGS) -o $(NAME)
 	@echo "Done!"
 
 fclean_spec:

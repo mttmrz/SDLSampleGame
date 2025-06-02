@@ -1,11 +1,14 @@
-#include "game.hpp"
 #include "Entity.hpp"
 #include "utils.hpp"
 #include <random>
-
+#include "SDL_ttf.h"
+#include <string>
+#include "game.hpp"
 using namespace std;
 
 
+
+void init_and_load(game *game, Render *wind, Doors *door1, Chest *chest1, int rand2);
 struct Projectile {
     int x, y;
     int cast = 0;
@@ -16,6 +19,105 @@ struct Projectile {
 };
 
 
+struct SlowText {
+    std::string fullText;
+    int currentIndex = 0;
+    Uint32 lastUpdate = 0;
+    Uint32 delay = 100;
+    SDL_Texture* texture = nullptr;
+    int width = 0;
+    int height = 0;
+    
+    // Nuovi campi per il fade out
+    bool isComplete = false;        // true quando tutto il testo è apparso
+    Uint32 completeTime = 0;        // quando il testo è diventato completo
+    Uint32 fadeDelay = 2000;        // quanto aspettare prima del fade (2 secondi)
+    Uint32 fadeDuration = 1000;     // durata del fade out (1 secondo)
+    Uint8 alpha = 255;              // alpha corrente (255 = opaco, 0 = trasparente)
+    bool shouldRender = true;       // se false, non renderizzare più
+};
+
+void updateSlowText(SDL_Renderer* renderer, TTF_Font* font, SlowText &slowText) {
+    Uint32 now = SDL_GetTicks();
+    
+    // Fase 1: Apparizione del testo lettera per lettera
+    if (!slowText.isComplete && now - slowText.lastUpdate > slowText.delay && 
+        slowText.currentIndex < (int)slowText.fullText.size()) {
+        
+        slowText.currentIndex++;
+        slowText.lastUpdate = now;
+        
+        // Controlla se il testo è completo
+        if (slowText.currentIndex >= (int)slowText.fullText.size()) {
+            slowText.isComplete = true;
+            slowText.completeTime = now;
+        }
+        
+        // Ricrea la texture
+        if (slowText.texture) {
+            SDL_DestroyTexture(slowText.texture);
+            slowText.texture = nullptr;
+        }
+        
+        SDL_Color color = {255, 255, 255, 255};
+        std::string sub = slowText.fullText.substr(0, slowText.currentIndex);
+        SDL_Surface* surface = TTF_RenderText_Blended(font, sub.c_str(), color);
+        slowText.texture = SDL_CreateTextureFromSurface(renderer, surface);
+        slowText.width = surface->w;
+        slowText.height = surface->h;
+        SDL_FreeSurface(surface);
+    }
+    
+    // Fase 2: Fade out dopo il delay
+    if (slowText.isComplete && now - slowText.completeTime > slowText.fadeDelay) {
+        Uint32 fadeElapsed = now - slowText.completeTime - slowText.fadeDelay;
+        
+        if (fadeElapsed < slowText.fadeDuration) {
+            // Calcola alpha: da 255 a 0
+            float fadeProgress = (float)fadeElapsed / (float)slowText.fadeDuration;
+            slowText.alpha = (Uint8)(255 * (1.0f - fadeProgress));
+        } else {
+            // Fade completato
+            slowText.alpha = 0;
+            slowText.shouldRender = false;
+        }
+    }
+}
+
+void renderSlowText(SDL_Renderer* renderer, SlowText &slowText, int x, int y) {
+    if (slowText.texture && slowText.shouldRender && slowText.alpha > 0) {
+        // Imposta l'alpha della texture
+        SDL_SetTextureAlphaMod(slowText.texture, slowText.alpha);
+        
+        SDL_Rect dst = {x, y, slowText.width, slowText.height};
+        SDL_RenderCopy(renderer, slowText.texture, NULL, &dst);
+    }
+}
+
+void message_to_the_player(SlowText &slowText, game *info)
+{	
+	 if (slowText.currentIndex == 0 || !slowText.shouldRender) // Reset anche se il precedente è finito
+        {
+            // Reset completo
+            if (slowText.texture) {
+                SDL_DestroyTexture(slowText.texture);
+                slowText.texture = nullptr;
+            }
+            if (!info->demo_end)
+			{
+				slowText.fullText = "Your faith is sealed...";
+			}
+			else
+				slowText.fullText = info->chest2.W_equipped ? "I can see you... MAGE." : "I can see you... WARRIOR.";
+            slowText.currentIndex = 0;
+            slowText.lastUpdate = SDL_GetTicks();
+            slowText.isComplete = false;
+            slowText.completeTime = 0;
+            slowText.alpha = 255;
+            slowText.shouldRender = true;
+			
+        }
+}
 void LFProp(game *info)
 {
 	map<int, bool>::iterator it = info->PropPos.begin();
@@ -55,43 +157,50 @@ int	RanGen(int min, int max)
 
 void renderDestroyables(game *game, Render *wind)
 {
+    auto it = game->PropPos.begin();
+    auto k = game->Props.begin();
+    k++;
 
-	map<int, bool>::iterator it = game->PropPos.begin();
-	vector<SDL_Texture *>::iterator k = game->Props.begin();
-	k++;
-	for (; it != game->PropPos.end(); it++, k++)
-	{
-		if (!it->second)
-			wind->renderTexture(*k, it->first, it->first, false);
-		else
-		{
-			game->PropPos.erase(it);
-			game->Props.erase(k);
-		}
-		
-	}
-
+    while (it != game->PropPos.end() && k != game->Props.end())
+    {
+        if (!it->second)
+        {
+            wind->renderTexture(*k, it->first, it->first, false, game);
+            ++it;
+            ++k;
+        }
+        else
+        {
+			if (game->Props.size() == 2)
+			{
+				game->show_key = true;
+			}
+			it = game->PropPos.erase(it);
+			k = game->Props.erase(k);
+        }
+    }
 }
+
 
 void renderFlyEnemies(game *game, Render *wind, int i)
 {	
 	static Cooldown qCooldown(1000);
 	vector<int>::iterator it = game->FlyPosx.begin();
 	vector<int>::iterator ite =game->FlyPosy.begin();
+
 	for (; it != game->FlyPosx.end(); it++, ite++)
 	{
 		if (*it > game->pposx)
 			game->Fly_left = false;
 		else
-		game->Fly_left = true;
-	
+			game->Fly_left = true;
 	
 		if (game->currLife == 0)
 			exit(printf("GAME OVER\n"));
 		if (game->Fly_left)
-		wind->renderTexture(game->FlyingEnR[i], *it, *ite, false);
+		wind->renderTexture(game->FlyingEnR[i], *it, *ite, false, game);
 		else
-		wind->renderTexture(game->FlyingEnL[i], *it, *ite, false);
+		wind->renderTexture(game->FlyingEnL[i], *it, *ite, false, game);
 		
 		if (*it > game->pposx + 64 && *it < game->pposx)
 		{
@@ -157,30 +266,30 @@ void renderStartingWeapon(game *game, Render *wind, Chest &chest1, SDL_KeyboardE
 		if (i < 30)
 		{
 			if (i % 2 == 0)
-			wind->renderTexture(chest1.ChestClosed[0], 348, 380, false);
+			wind->renderTexture(chest1.ChestClosed[0], 348, 380, false, game);
 			else
-			wind->renderTexture(chest1.ChestClosed[0], 352, 380, false);
+			wind->renderTexture(chest1.ChestClosed[0], 352, 380, false, game);
 
 		}
 		i++;
 		if (i >= 30 && i <= 40)
-		wind->renderTexture(chest1.ChestClosed[8], 352, 380, false);
+		wind->renderTexture(chest1.ChestClosed[8], 352, 380, false, game);
 		if (i >= 41 && i <= 44)
 		{
 			static int lol;
-			wind->renderTexture(game->Sprinkle[lol], 352, 380, false);
-			wind->renderTexture(game->Sprinkle[lol], 352, 380, false);	
-			wind->renderTexture(game->Sprinkle[lol], 352, 380, false);
+			wind->renderTexture(game->Sprinkle[lol], 352, 380, false, game);
+			wind->renderTexture(game->Sprinkle[lol], 352, 380, false, game);	
+			wind->renderTexture(game->Sprinkle[lol], 352, 380, false, game);
 			lol++;
 		}
 		if (i >= 45)
 		{
-			wind->renderTexture(game->Smoke[k], 342, 360, false);
+			wind->renderTexture(game->Smoke[k], 342, 360, false, game);
 			k++;
 			if (k == 19)
 				k = 0;
 
-			wind->renderTexture(game->base_sword, 350, 400, false);
+			wind->renderTexture(game->base_sword, 350, 400, false, game);
 			game->picked = false;
 		}
 	}
@@ -197,71 +306,74 @@ void renderStartingWeapon2(game *game, Render *wind, Chest &chest1, SDL_Keyboard
 		if (i < 30)
 		{
 			if (i % 2 == 0)
-			wind->renderTexture(chest1.ChestClosed[0], 548, 380, false);
+			wind->renderTexture(chest1.ChestClosed[0], 548, 380, false, game);
 			else
-			wind->renderTexture(chest1.ChestClosed[0], 552, 380, false);
+			wind->renderTexture(chest1.ChestClosed[0], 552, 380, false, game);
 
 		}
 		i++;
 		if (i >= 30 && i <= 40)
-		wind->renderTexture(chest1.ChestClosed[8], 552, 380, false);
+		wind->renderTexture(chest1.ChestClosed[8], 552, 380, false, game);
 		if (i >= 41 && i <= 44)
 		{
 			static int lol;
-			wind->renderTexture(game->Sprinkle[lol], 552, 380, false);
-			wind->renderTexture(game->Sprinkle[lol], 552, 380, false);	
-			wind->renderTexture(game->Sprinkle[lol], 552, 380, false);
+			wind->renderTexture(game->Sprinkle[lol], 552, 380, false, game);
+			wind->renderTexture(game->Sprinkle[lol], 552, 380, false, game);	
+			wind->renderTexture(game->Sprinkle[lol], 552, 380, false, game);
 			lol++;
 		}
 		if (i >= 45)
 		{
-			wind->renderTexture(game->SmokeG[k], 510, 290, false);
+			wind->renderTexture(game->SmokeG[k], 510, 290, false, game);
 			k++;
 			if (k == 19)
 				k = 0;
 
-			wind->renderTexture(game->base_wand, 550, 400, false);
+			wind->renderTexture(game->base_wand, 550, 400, false, game);
 			game->chest2.picked = false;
 		}
 	}
 
 }
 
-void renderThings(game *game, int Tf, SDL_Texture *currentTexture, Render *wind, int fps, Doors door1, Chest &chest1, SDL_KeyboardEvent *event)
+void renderThings(game *game, int Tf, SDL_Texture *currentTexture, Render *wind, int fps, Doors &door1, Chest &chest1, SDL_KeyboardEvent *event, SlowText &text)
 {
 	bool magickAnim = (currentTexture == game->MagickAnimR[0] ||
                    currentTexture == game->MagickAnimR[1] ||
                    currentTexture == game->MagickAnimR[2]);
 
-	if (game->left && magickAnim)
+	if (game->left && magickAnim && !game->Release_Wand)  
 	{
-		wind->renderTexture(currentTexture, game->pposx, game->pposy, true);
+		wind->renderTexture(currentTexture, game->pposx, game->pposy, true, game);
 	}
 	else
 	{
-		wind->renderTexture(currentTexture, game->pposx, game->pposy, false);
+		if (!game->Release_Wand)
+			wind->renderTexture(currentTexture, game->pposx, game->pposy, false, game);
 	}
-	wind->renderTexture(game->HealthBar[game->currLife], 0, 0, false);
-	wind->renderTexture(game->TorchAnim[Tf], 430, 0, false);
-	wind->renderTexture(game->TorchAnim[Tf], 530, 0, false);
-	wind->renderTexture(game->TorchAnim[Tf], 530, 898, false);
-	wind->renderTexture(game->TorchAnim[Tf], 130, 898, false);
-	wind->renderTexture(game->Props[0], 480, 8, false);
-
-	if (door1.getLock())
-		wind->renderTexture(door1.DoorLocked[0], 580, 0, false);
-	if (!chest1.isOpen())
+	wind->renderTexture(game->HealthBar[game->currLife], 0, 0, false, game);
+	wind->renderTexture(game->TorchAnim[Tf], 430, 0, false, game);
+	wind->renderTexture(game->TorchAnim[Tf], 530, 0, false, game);
+	wind->renderTexture(game->TorchAnim[Tf], 530, 898, false, game);
+	wind->renderTexture(game->TorchAnim[Tf], 130, 898, false, game);
+	wind->renderTexture(game->Props[0], 480, 8, false, game);
+	static int index;
+	if (game->show_key)
+	{
+		wind->renderTexture(game->key[index / 3], game->PropToDes, game->PropToDes, false, game);
+		index = index == 30 ? 0 : index + 1;
+	}	if (!chest1.isOpen())
 	{
 		static int l;
 		static int ll;
 		if (ll < 100)
 		{
-			wind->renderTexture(chest1.ChestClosed[0], 350, 380, false);
+			wind->renderTexture(chest1.ChestClosed[0], 350, 380, false, game);
 			ll++;
 		}
 		else
 		{
-			wind->renderTexture(chest1.ChestClosed[l], 350, 380, false);
+			wind->renderTexture(chest1.ChestClosed[l], 350, 380, false, game);
 			l++;
 			if (l == chest1.ChestClosed.size() - 1)
 			{
@@ -276,12 +388,12 @@ void renderThings(game *game, int Tf, SDL_Texture *currentTexture, Render *wind,
 		static int ll;
 		if (ll < 100)
 		{
-			wind->renderTexture(chest1.ChestClosed[0], 550, 380, false);
+			wind->renderTexture(chest1.ChestClosed[0], 550, 380, false, game);
 			ll++;
 		}
 		else
 		{
-			wind->renderTexture(chest1.ChestClosed[l], 550, 380, false);
+			wind->renderTexture(chest1.ChestClosed[l], 550, 380, false, game);
 			l++;
 			if (l == chest1.ChestClosed.size() - 1)
 			{
@@ -293,9 +405,10 @@ void renderThings(game *game, int Tf, SDL_Texture *currentTexture, Render *wind,
 	}
 	if (game->destroyed)
 	{
+
 		
 		static int k;
-		wind->renderTexture(game->Explosion[k], game->PropToDes, game->PropToDes, false);
+		wind->renderTexture(game->Explosion[k], game->PropToDes, game->PropToDes, false, game);
 		k++;
 		if (k == 7)
 		{
@@ -312,35 +425,35 @@ void renderThings(game *game, int Tf, SDL_Texture *currentTexture, Render *wind,
 	renderDestroyables(game, wind);
 	renderFlyEnemies(game, wind, fps);
 	if (game->fSwordMSG)
-		wind->renderTexture(game->firstSwordMSG, 350 , 450, false); 
+		wind->renderTexture(game->firstSwordMSG, 350 , 450, false, game); 
 	//CHEST 2
 	if (game->chest2.WeaponMSG)
-		wind->renderTexture(game->firstWandMSG, 350 , 450, false);
+		wind->renderTexture(game->firstWandMSG, 350 , 450, false, game);
 	if (game->choice)
 	{
 		if (game->currchoice == 0)
-		wind->renderTexture(game->AcceptW, 350 , 450, false);
+		wind->renderTexture(game->AcceptW, 350 , 450, false, game);
 		else
-		wind->renderTexture(game->RefuseW, 350, 450, false);
+		wind->renderTexture(game->RefuseW, 350, 450, false, game);
 	}
 	//CHEST 2
 	if (game->chest2.choice)
 	{
 		if (game->chest2.currchoice == 0)
-		wind->renderTexture(game->AcceptW, 350 , 450, false);
+		wind->renderTexture(game->AcceptW, 350 , 450, false, game);
 		else
-		wind->renderTexture(game->RefuseW, 350, 450, false);
+		wind->renderTexture(game->RefuseW, 350, 450, false, game);
 	}
 	if (game->YouRecived)
 	{
 		game->overhead = true;
-		wind->renderTexture(game->RecRustySword, 350, 450, false);
+		wind->renderTexture(game->RecRustySword, 350, 450, false, game);
 	}
 	//CHEST 2
 	if (game->chest2.YouRecived)
 	{
 		game->chest2.overhead = true;
-		wind->renderTexture(game->RecOldRod, 350, 450, false);
+		wind->renderTexture(game->RecOldRod, 350, 450, false, game);
 	} 
 	if (game->overhead)
 	{	
@@ -352,23 +465,114 @@ void renderThings(game *game, int Tf, SDL_Texture *currentTexture, Render *wind,
 		if (game->left)
 		{
 			SDL_SetTextureAlphaMod(game->RoverL, o);
-				wind->renderTexture(game->RoverR, game->pposx, game->pposy - 60, false);	
+				wind->renderTexture(game->RoverR, game->pposx, game->pposy - 60, false, game);	
 		}
 		else
 		{
 			SDL_SetTextureAlphaMod(game->RoverR, o);
-			wind->renderTexture(game->RoverL, game->pposx, game->pposy - 60, false);
+			wind->renderTexture(game->RoverL, game->pposx, game->pposy - 60, false, game);
 		}
 
 		if (o <= 0)
 			game->overhead = false;
 	}
+	// porta e tc.
+	if (door1.getLock())
+	{
+		wind->renderTexture(door1.DoorLocked[0], 580, 0, false, game);
+
+	}
+	else
+	{
+		static int index;
+		if (!game->door_opened)
+		{
+			game->idle = false;
+			wind->renderTexture(door1.DoorLocked[index / 3], 580, 0, false, game);
+			index++;
+			if (index == 42)
+				game->door_opened = true;
+		}
+		static int cu;
+	if (game->door_opened)
+	{
+		static Uint8 alpha = 0;
+		wind->renderTexture(door1.DoorLocked[15], 580, 0, false, game);
+
+		if (!game->demo_end)
+		{
+			game->demo_end = true;
+		}
+		else
+		{
+			game->idle = false;
+			game->moveUp = true;
+			if (game->pposx < 582)
+				game->pposx += 4;
+			if (game->pposx > 614)
+				game->pposx -= 4;
+			if (cu % 5 == 0)
+			{
+				if (game->pposy > 0)
+					game->pposy -= 4;
+			}
+		}
+
+		if (alpha < 255)
+			alpha += 5;
+
+		// Disegna direttamente sul renderer principale (NESSUN render target alternativo)
+		SDL_SetTextureBlendMode(game->full_black, SDL_BLENDMODE_BLEND);
+		SDL_SetTextureAlphaMod(game->full_black, alpha);
+		SDL_RenderCopy(wind->getRenderer(), game->full_black, nullptr, nullptr);
+
+		cu++;
+	}
+	if (cu == 120)
+	{
+		message_to_the_player(text, game);
+	}
+	if (cu == 300)
+	{
+		SDL_Quit();
+		SDL_QuitSubSystem(SDL_INIT_VIDEO);
+		wind->cleanUp(game);
+		exit(0);
+
+	}
+}
+
+
 
 }
 
 void Collisions(game *info, std::vector<Projectile>& projectiles)
 {
+
+	if (info->demo_end)
+	{
+		return ;
+	}
+	if (info->show_key) {
+		int key_x = info->PropToDes;
+		int key_y = info->PropToDes - 60;
+		int radius = 50;
+		if (info->pposx >= key_x - radius && info->pposx <= key_x + radius &&
+			info->pposy >= key_y - radius && info->pposy <= key_y + radius) 
+		{
+			info->show_key = false;
+			info->key_picked = true;
+		}
+	}
     // Teletrasporto
+
+
+	// porta
+	if (info->pposx >= 500 && info->pposx <= 630 && info->pposy >= -60 && info->pposy <= 100) {
+		info->on_the_door = true;
+	} else {
+		info->on_the_door = false;
+	}
     if (info->pposx >= 525 && info->pposx <= 640 && info->pposy >= 0 && info->pposy <= 64)
     {
         int step = info->running ? 16 : 8;
@@ -479,20 +683,22 @@ void Collisions(game *info, std::vector<Projectile>& projectiles)
 
 		const int radius = 60;
 		const int radiusSquared = radius * radius;
-
-		for (const auto& prop : info->PropCoord)  
+		if (!info->Release_Wand)
 		{
-			int dx = px - prop.first;
-			int dy = py - prop.second;
-
-			int distSquared = dx * dx + dy * dy;
-
-			if (distSquared <= radiusSquared)
+			for (const auto& prop : info->PropCoord)  
 			{
-				p.hit = true;
-				p.frame = 7;
-				p.frameDelay = 0;
-				break;
+				int dx = px - prop.first;
+				int dy = py - prop.second;
+	
+				int distSquared = dx * dx + dy * dy;
+	
+				if (distSquared <= radiusSquared)
+				{
+					p.hit = true;
+					p.frame = 7;
+					p.frameDelay = 0;
+					break;
+				}
 			}
 		}
 	}
@@ -558,7 +764,6 @@ SDL_Texture*Animations(SDL_Texture *currentTexture, game *info, int currentFrame
 	static int tookDmg;
 	LFProp(info);
 
-
 	if (info->pposx >= 0 && info->pposx <= 182 && info->pposy >= 0 && info->pposy <= 48)
 		SDL_SetTextureAlphaMod(info->HealthBar[info->currLife], 100);
 	else
@@ -568,7 +773,8 @@ SDL_Texture*Animations(SDL_Texture *currentTexture, game *info, int currentFrame
 	else
 	SDL_SetTextureAlphaMod(info->Props[0], 255);
 	
-	Collisions(info);
+	if (!info->demo_end)
+		Collisions(info);
 
 	if (info->idle && info->Hattk && info->W_equipped)
 	{	
@@ -594,7 +800,6 @@ SDL_Texture*Animations(SDL_Texture *currentTexture, game *info, int currentFrame
 					j = 0;
 			}
 		}
-		
 
 	}
 	if (info->idle && !info->Hattk && info->Hattak2 && info->W_equipped)
@@ -623,6 +828,62 @@ SDL_Texture*Animations(SDL_Texture *currentTexture, game *info, int currentFrame
 		}
 	}
 
+
+	if (info->idle && info->Hattk_Wand && info->chest2.W_equipped && !info->Release_Wand)
+	{	
+		if (!info->left)
+		{
+			static int j;
+			if (!info->Release_Wand)
+			{
+				currentTexture = info->Hurt[j];
+				j++;
+				if (j == 3)
+					j = 0;
+			}
+		}
+		else
+		{
+			static int j;
+			if (!info->Release_Wand)
+			{
+				currentTexture = info->HurtL[j];
+				j++;
+				if (j == 3)
+					j = 0;
+			}
+		}
+
+	}
+	if (info->idle && !info->Hattk_Wand && info->Hattak2_Wand && info->chest2.W_equipped && !info->Release_Wand)
+	{	
+		if (!info->left && (!info->Release_Wand && currentTexture != info->MagickAnimR[2]))
+		{
+			static int j = 0;
+			currentTexture = info->Hurt[j];
+			j++;
+			if (j == 3)
+			{
+				j = 0;
+				info->Hattak2_Wand = false;
+			}
+		}
+		else
+		{
+			if (!info->Release_Wand)
+			{
+				static int j = 0;
+				currentTexture = info->HurtL[j];
+				j++;
+				if (j == 3)
+				{
+					j = 0;
+					info->Hattak2_Wand = false;
+				}
+			}
+		}
+	}
+
 	if (info->attack && info->W_equipped)
 	{	
 		if (!info->left)
@@ -642,9 +903,9 @@ SDL_Texture*Animations(SDL_Texture *currentTexture, game *info, int currentFrame
 				l = 0;
 		}
 	} 
-	if (info->idle == true && info->left == false && info->attack == false && !info->Hattk && !info->Hattak2 && !info->chest2.attack)
+	if (!info->Release_Wand && info->idle == true && info->left == false && info->attack == false && !info->Hattk && !info->Hattak2 && !info->chest2.attack && !info->Hattak2_Wand &&  !info->Hattk_Wand)
 		currentTexture = info->playeridleAnimation[currentFrame];
-	if (info->idle == true && info->left == true && info->attack == false && !info->Hattk && !info->Hattak2 && !info->chest2.attack)
+	if (!info->Release_Wand && info->idle == true && info->left == true && info->attack == false && !info->Hattk && !info->Hattak2 && !info->chest2.attack && !info->Hattak2_Wand &&  !info->Hattk_Wand)
 		currentTexture = info->playeridleAnimationL[currentFrame];
 	if (info->moveRight == true)
 	{	
@@ -753,7 +1014,7 @@ SDL_Texture*Animations(SDL_Texture *currentTexture, game *info, int currentFrame
 	}
 	else
 		SDL_SetTextureAlphaMod(currentTexture,  255);
-	if (info->chest2.W_equipped)
+	if (info->chest2.W_equipped && !info->Release_Wand)
 	{
 		wand_anim(info, &currentTexture);
 	}
@@ -771,21 +1032,21 @@ void PopUpMSG(game *info, Render *wind, SDL_KeyboardEvent* event)
 }
 
 
-void pickWeaponLogickp2(game *info, SDL_KeyboardEvent *event, Render *wind)
+void pickWeaponLogickp2(game *info, SDL_KeyboardEvent *event, Render *wind, SlowText &slowText, Chest &chest1)
 {
 	if (info->chest2.choice)
 	{
-		if (event->keysym.sym == SDLK_RIGHT)
+		if (event->keysym.sym == SDLK_RIGHT || event->keysym.sym == SDLK_d)
 		{
 			info->chest2.choice = true;
 			info->chest2.currchoice = 1;
 		}
-		if (event->keysym.sym == SDLK_LEFT)
+		if (event->keysym.sym == SDLK_LEFT || event->keysym.sym == SDLK_a)
 		{
 			info->chest2.choice = true;
 			info->chest2.currchoice = 0;
 		}
-		if (event->keysym.sym == SDLK_RETURN)
+		if (event->keysym.sym == SDLK_RETURN || event->keysym.sym == SDLK_e)
 		{
 			info->chest2.choice = false;
 			info->chest2.WeaponMSG = false;
@@ -800,12 +1061,18 @@ void pickWeaponLogickp2(game *info, SDL_KeyboardEvent *event, Render *wind)
 	if (info->chest2.ChestArea)
 	{	
 		if (event->keysym.sym == SDLK_e)
-			info->chest2.WeaponMSG = true;
+		{
+			if (!chest1.isOpen())
+				info->chest2.WeaponMSG = true;
+			else
+				message_to_the_player(slowText, info);
+
+		}
 		else
-		info->chest2.WeaponMSG = false;
+			info->chest2.WeaponMSG = false;
 	}
 	else
-	info->chest2.choice = false;
+		info->chest2.choice = false;
 	if (info->chest2.WeaponArea && !info->chest2.picked && !info->chest2.W_equipped)
 	{
 		if (event->keysym.sym == SDLK_e)
@@ -831,24 +1098,26 @@ void pickWeaponLogickp2(game *info, SDL_KeyboardEvent *event, Render *wind)
 			info->chest2.picked = false;
 		}
 	}
-
 }
 
-void pickWeaponLogick(game *info, SDL_KeyboardEvent *event, Chest &chest1, Render *wind)
+
+
+void pickWeaponLogick(game *info, SDL_KeyboardEvent *event, Chest &chest1, Render *wind, SlowText &slowText)
 {
+
 	if (info->choice)
 	{
-		if (event->keysym.sym == SDLK_RIGHT)
+		if (event->keysym.sym == SDLK_RIGHT || event->keysym.sym == SDLK_d)
 		{
 			info->choice = true;
 			info->currchoice = 1;
 		}
-		if (event->keysym.sym == SDLK_LEFT)
+		if (event->keysym.sym == SDLK_LEFT || event->keysym.sym == SDLK_a)
 		{
 			info->choice = true;
 			info->currchoice = 0;
 		}
-		if (event->keysym.sym == SDLK_RETURN)
+		if (event->keysym.sym == SDLK_RETURN || event->keysym.sym == SDLK_e)
 		{
 			info->choice = false;
 			info->fSwordMSG = false;
@@ -863,16 +1132,21 @@ void pickWeaponLogick(game *info, SDL_KeyboardEvent *event, Chest &chest1, Rende
 	if (info->fSwordMSG)
 		info->choice = true;
 
-
 	if (info->Chest1Area)
 	{	
 		if (event->keysym.sym == SDLK_e)
-			PopUpMSG(info, wind, event);
+		{
+			if (!info->chest2.isOpen())
+				PopUpMSG(info, wind, event);
+			else
+				message_to_the_player(slowText, info);
+
+		}
 		else
-		info->fSwordMSG = false;
+			info->fSwordMSG = false;
 	}
 	else
-	info->choice = false;
+		info->choice = false;
 	if (info->SwordArea && !info->picked && !info->W_equipped)
 	{
 		if (event->keysym.sym == SDLK_e)
@@ -897,48 +1171,80 @@ void pickWeaponLogick(game *info, SDL_KeyboardEvent *event, Chest &chest1, Rende
 			info->picked = false;
 		}
 	}
-	pickWeaponLogickp2(info, event, wind);
-
-
+	pickWeaponLogickp2(info, event, wind, slowText, chest1);
 }
 
 
 void WandAttack(game *info, SDL_KeyboardEvent* event, const Uint8 *currentKeyState, Uint32 &spaceKeyDownTime, float elapsedSeconds, Uint32 currentTime, SDL_Texture * currentTexture)
 {
+	static Cooldown qCooldown(1000);
+	static Uint32 qKeyDt = 0;
+	float elapseQ = (currentTime - qKeyDt) / 1000.0f;
 	if (event->keysym.sym == SDLK_SPACE && info->chest2.W_equipped) 
 	{
-		if (!currentKeyState[SDL_SCANCODE_SPACE])
-		{
+			if (!currentKeyState[SDL_SCANCODE_SPACE])
+			{
 
-		// Space key was released
-		spaceKeyDownTime = 0; // Reset the space key down time
-		} 
-		else 
-		{	
-			if (elapsedSeconds < 1 && currentTime / 1000.0f > 1  && info->launch && info->idle)
+			// Space key was released
+			spaceKeyDownTime = 0; // Reset the space key down time
+			} 
+			else 
 			{	
-				info->chest2.Sattack = true;
-				info->fixedpos = info->pposy;
-				elapsedSeconds = 0;
-				spaceKeyDownTime = 0;
+				if (elapsedSeconds < 1 && currentTime / 1000.0f > 1  && info->launch && info->idle)
+				{	
+					info->chest2.Sattack = true;
+					info->fixedpos = info->pposy;
+					elapsedSeconds = 0;
+					spaceKeyDownTime = 0;
+				}
+				else
+				{
+					if (!info->wand_cd)
+						info->chest2.attack = true;
+					spaceKeyDownTime = 0;
+					elapsedSeconds = 0;
+				} 
+			// Space key is still held down
+			if (spaceKeyDownTime == 0) {
+				spaceKeyDownTime = currentTime; // Set the space key down time
+			}
+		}
+	}
+	if (!info->moveDown && !info->moveLeft && !info->moveRight && !info->moveUp && info->chest2.W_equipped && event->keysym.sym == SDLK_q)
+	{
+		if (qCooldown.isReady())
+		{		
+			if (!currentKeyState[SDL_SCANCODE_Q])
+			{	
+				qCooldown.activate();
+				qKeyDt = 0;
+				info->Release_Wand = true;
 			}
 			else
 			{
-				if (!info->wand_cd)
-					info->chest2.attack = true;
-				spaceKeyDownTime = 0;
-				elapsedSeconds = 0;
-			} 
-		// Space key is still held down
-		if (spaceKeyDownTime == 0) {
-			spaceKeyDownTime = currentTime; // Set the space key down time
+				if (elapseQ <= 2.5 && currentTime / 1000.0f > 1)
+				{	
+					info->Hattk_Wand = true;
+					info->Hattak2_Wand = true;
+					elapseQ = 0;
+					qKeyDt = 0;
+				}
+				else
+				{
+					info->Hattk = false;
+					qKeyDt = 0;
+					elapseQ = 0;
+				}
+				if (qKeyDt == 0)
+					qKeyDt = currentTime;
+			}
 		}
-		}
+
 	}
 }
 
 
-void manageKEYBOARD(SDL_KeyboardEvent* event, Render* wind, game* info, int& animationSpeed, Chest &chest1, SDL_Texture * currentTexture) 
+void manageKEYBOARD(SDL_KeyboardEvent* event, Render* wind, game* info, int& animationSpeed, Chest &chest1, SDL_Texture * currentTexture, SlowText& slowText, Doors &door) 
 {
 const Uint8* currentKeyState = SDL_GetKeyboardState(nullptr);
 static Uint32 spaceKeyDownTime = 0; // Track the time when the space key was pressed
@@ -951,6 +1257,15 @@ Uint32 currentTime = SDL_GetTicks(); // Get the current time in milliseconds
 float elapsedSeconds = (currentTime - spaceKeyDownTime) / 1000.0f; // Calculate the elapsed time since the space key was pressed
 float elapseQ = (currentTime - qKeyDt) / 1000.0f;
 if (event->type == SDL_KEYDOWN) {	
+	
+	if (info->on_the_door && event->keysym.sym == SDLK_e)
+	{
+		if (info->key_picked)
+		{
+			door.setLock(false);
+		}
+
+	}
 	if (event->keysym.sym == SDLK_ESCAPE) {
 		wind->cleanUp(info);
 		exit(0);
@@ -1053,7 +1368,7 @@ if (event->type == SDL_KEYDOWN) {
 		}
 		}
 	}
-	pickWeaponLogick(info, event, chest1, wind);
+	pickWeaponLogick(info, event, chest1, wind, slowText);
 	WandAttack(info, event, currentKeyState, spaceKeyDownTime, elapsedSeconds, currentTime, currentTexture);
 	if (currentKeyState[SDL_SCANCODE_LSHIFT]) {
 		animationSpeed = 60;
@@ -1062,12 +1377,31 @@ if (event->type == SDL_KEYDOWN) {
 		info->idle = true;
 	}
 }
+if (!door.getLock())
+{
+	info->running = false;
+	info->attack = false;
+	animationSpeed = 70;
+	info->Sattack = false;
+	info->Hattk = false;
+	info->Hattk_Wand = false;
+	spaceKeyDownTime = 0; // Reset the space key down time
+
+}
 
 if (event->type == SDL_KEYUP) {
-	if (info->W_equipped && event->keysym.sym == SDLK_q && IdleCooldown.getTime() > 0  && !info->moveDown && !info->moveLeft && !info->moveRight && !info->moveUp)
+	if ((info->chest2.W_equipped || info->W_equipped) && event->keysym.sym == SDLK_q && IdleCooldown.getTime() > 0  && !info->moveDown && !info->moveLeft && !info->moveRight && !info->moveUp)
 	{
- 		if (info->idle && qCooldown.getTime() >= 2.5)
-			info->Release = true;
+
+ 		if (info->idle && qCooldown.getTime() >= 2)
+		{
+			if (info->W_equipped)
+				info->Release = true;
+			if (info->chest2.W_equipped)
+				info->Release_Wand = true;
+
+		}
+
 		qCooldown.activate();
 		currentKeyState = SDL_GetKeyboardState(nullptr);
 	}
@@ -1098,6 +1432,7 @@ if (event->type == SDL_KEYUP) {
 	animationSpeed = 70;
 	info->Sattack = false;
 	info->Hattk = false;
+	info->Hattk_Wand = false;
 	spaceKeyDownTime = 0; // Reset the space key down time
 }
 }
@@ -1115,6 +1450,7 @@ void moreEvents(game *info, Render *wind, SDL_Texture * currentTexture)
             info->launch = false;
         }
 
+
         for (size_t idx = 0; idx < projectiles.size(); )
         {
             auto& p = projectiles[idx];
@@ -1125,7 +1461,7 @@ void moreEvents(game *info, Render *wind, SDL_Texture * currentTexture)
             else
                 animFrame = 3 + ((p.frame - 3) % 4);
 
-            wind->renderTexture(info->MagickAnimR[animFrame], p.x + p.cast, p.y + 10, !p.directionRight);
+            wind->renderTexture(info->MagickAnimR[animFrame], p.x + p.cast, p.y + 10, !p.directionRight, info);
 
             p.frameDelay++;
             if (p.frameDelay >= 2) {
@@ -1167,11 +1503,12 @@ void checkForEvents(game *info, Render *wind, int &As, SDL_Texture * currentText
 			{
 				if ((it->first - info->pposx >= 0 && it->first - info->pposx <= 200) && ((it->first - info->pposy >= 0 && it->first - info->pposy <= 64) || (info->pposy - it->first >= 0 && info->pposy - it->first <= 64)))
 				{
+						if (info->show_key)
+							return;
 						i = info->PropPos.find(it->first);
 						info->PropToDes = it->first;
 						info->destroyed = true;
 						i->second = true;
-				
 				}
 			}
 		}
@@ -1181,6 +1518,8 @@ void checkForEvents(game *info, Render *wind, int &As, SDL_Texture * currentText
 			{
 				if ((info->pposx - it->first >= 0 && info->pposx - it->first <= 200) && ((it->first - info->pposy >= 0 && it->first - info->pposy <= 64) || (info->pposy - it->first >= 0 && info->pposy - it->first <= 64)))
 				{
+					if (info->show_key)
+							return;
 					i = info->PropPos.find(it->first);
 					info->PropToDes = it->first;
 					info->destroyed = true;
@@ -1198,7 +1537,7 @@ void checkForEvents(game *info, Render *wind, int &As, SDL_Texture * currentText
 		info->FlyPosy.push_back(RanGen(0, 960));
 		static int k;
 		if (k > 0)
-		wind->renderTexture(info->FlyDeath[k], info->currFlyingX, info->currFlyingY, false);
+		wind->renderTexture(info->FlyDeath[k], info->currFlyingX, info->currFlyingY, false, info);
 		k++;
 		if (k == info->FlyDeath.size())
 		{	
@@ -1223,6 +1562,11 @@ int main(int ac, char **av)
 		return 1;
 	}
 	Render wind("Game", 640 * 2, 480 * 2);
+	SDL_Renderer* renderer = wind.renderer;
+	TTF_Init();
+	TTF_Font* font = TTF_OpenFont("whitefont.ttf", 48);  // 24 = dimensione font
+
+
 	int windowREfreshRate = wind.getRefreshRate();
 	// INIT TEXTURES
 /* 		SDL_Texture *floorTex = wind.loadTexture("img/bg/floor_1.png");  */
@@ -1234,7 +1578,6 @@ int main(int ac, char **av)
 	game game;
 	Doors door1;
 	Chest chest1;
-	
 	//FLYING ENEMIS COORDINATES
 
 	
@@ -1263,6 +1606,9 @@ int main(int ac, char **av)
 	game.Sattack = false;
 	game.Hattk = false;
 	game.Release = false;
+	game.Release_Wand = false;
+	game.Hattak2_Wand = false;
+	game.Hattk_Wand = false;
 	game.Hattak2 = false;
 	game.destroyed = false;
 	game.Fly_left = false;
@@ -1284,296 +1630,11 @@ int main(int ac, char **av)
 	game.currLife = 5;
 	game.fixedpos = 2000;
 	game.launch = false;
+	game.launch_heavy = false;
 	game.wand_cd = false;
+	SlowText slowText;
+	init_and_load(&game, &wind, &door1, &chest1, rand2);
 
-
-	// PROP POSITION INSERT
-	game.PropPos.insert(make_pair(game.randProp, false));
-	game.PropPos.insert(make_pair(rand2, false));
-	game.PropCoord.insert(make_pair(0, 0));
-
-//LOAD Hurt frame
-	game.Hurt.push_back(wind.loadTexture("img/pl/right/hurt1.png"));
-	game.Hurt.push_back(wind.loadTexture("img/pl/right/hurt.png"));
-	game.Hurt.push_back(wind.loadTexture("img/pl/right/hurt2.png"));
-	game.Hurt.push_back(wind.loadTexture("img/pl/left/hurt1L.png"));
-	game.Hurt.push_back(wind.loadTexture("img/pl/left/hurtL.png"));
-	game.Hurt.push_back(wind.loadTexture("img/pl/left/hurt2L.png"));
-//load Floor
-	game.Floor.push_back(wind.loadTexture("img/bg/floor_1.png"));
-	game.Floor.push_back(wind.loadTexture("img/bg/floor_2.png"));
-	game.Floor.push_back(wind.loadTexture("img/bg/floor_3.png"));
-	game.Floor.push_back(wind.loadTexture("img/bg/floor_4.png"));	
-// Load the player idle animation textures
-	game.playeridleAnimation.push_back(wind.loadTexture("img/pl/right/pidle0.png"));
-	game.playeridleAnimation.push_back(wind.loadTexture("img/pl/right/pidle0.png"));
-	game.playeridleAnimation.push_back(wind.loadTexture("img/pl/right/pidle1.png"));
-	game.playeridleAnimation.push_back(wind.loadTexture("img/pl/right/pidle1.png"));
-	game.playeridleAnimation.push_back(wind.loadTexture("img/pl/right/pidle2.png"));
-	game.playeridleAnimation.push_back(wind.loadTexture("img/pl/right/pidle2.png"));	
-	game.playeridleAnimation.push_back(wind.loadTexture("img/pl/right/pidle5.png"));
-	game.playeridleAnimation.push_back(wind.loadTexture("img/pl/right/pidle5.png"));
-	game.playeridleAnimation.push_back(wind.loadTexture("img/pl/right/pidle4.png"));
-	game.playeridleAnimation.push_back(wind.loadTexture("img/pl/right/pidle4.png"));
-//Load the player idle left animation textures
-
-	game.playeridleAnimationL.push_back(wind.loadTexture("img/pl/left/pidle0l.png"));
-	game.playeridleAnimationL.push_back(wind.loadTexture("img/pl/left/pidle0l.png"));
-	game.playeridleAnimationL.push_back(wind.loadTexture("img/pl/left/pidle1l.png"));
-	game.playeridleAnimationL.push_back(wind.loadTexture("img/pl/left/pidle1l.png"));
-	game.playeridleAnimationL.push_back(wind.loadTexture("img/pl/left/pidle2l.png"));
-	game.playeridleAnimationL.push_back(wind.loadTexture("img/pl/left/pidle2l.png"));
-	game.playeridleAnimationL.push_back(wind.loadTexture("img/pl/left/pidle5l.png"));
-	game.playeridleAnimationL.push_back(wind.loadTexture("img/pl/left/pidle5l.png"));
-	game.playeridleAnimationL.push_back(wind.loadTexture("img/pl/left/pidle4l.png"));
-	game.playeridleAnimationL.push_back(wind.loadTexture("img/pl/left/pidle4l.png"));
-
-// Load the player running right animation textures
-	game.RunRAnim.push_back(wind.loadTexture("img/pl/right/runR0.png"));
-	game.RunRAnim.push_back(wind.loadTexture("img/pl/right/runR1.png"));
-	game.RunRAnim.push_back(wind.loadTexture("img/pl/right/runR1.png"));
-	game.RunRAnim.push_back(wind.loadTexture("img/pl/right/runR2.png"));
-	game.RunRAnim.push_back(wind.loadTexture("img/pl/right/runR2.png"));
-	game.RunRAnim.push_back(wind.loadTexture("img/pl/right/runR3.png"));
-	game.RunRAnim.push_back(wind.loadTexture("img/pl/right/runR3.png"));
-	game.RunRAnim.push_back(wind.loadTexture("img/pl/right/runR4.png"));
-	game.RunRAnim.push_back(wind.loadTexture("img/pl/right/runR4.png"));
-	game.RunRAnim.push_back(wind.loadTexture("img/pl/right/runR0.png"));
-// Load the player running left animation textures
-	game.RunLAnim.push_back(wind.loadTexture("img/pl/left/runL0.png"));
-	game.RunLAnim.push_back(wind.loadTexture("img/pl/left/runL1.png"));
-	game.RunLAnim.push_back(wind.loadTexture("img/pl/left/runL1.png"));
-	game.RunLAnim.push_back(wind.loadTexture("img/pl/left/runL2.png"));
-	game.RunLAnim.push_back(wind.loadTexture("img/pl/left/runL2.png"));
-	game.RunLAnim.push_back(wind.loadTexture("img/pl/left/runL3.png"));
-	game.RunLAnim.push_back(wind.loadTexture("img/pl/left/runL3.png"));
-	game.RunLAnim.push_back(wind.loadTexture("img/pl/left/runL4.png"));
-	game.RunLAnim.push_back(wind.loadTexture("img/pl/left/runL4.png"));
-	game.RunLAnim.push_back(wind.loadTexture("img/pl/left/runL0.png"));
-// Load the player attacking to the right animation textures
-	game.AttackRAnim.push_back(wind.loadTexture("img/pl/right/attack00R.png"));
-	game.AttackRAnim.push_back(wind.loadTexture("img/pl/right/attack02R.png"));	
-	game.AttackRAnim.push_back(wind.loadTexture("img/pl/right/attack01R.png"));
-	game.AttackRAnim.push_back(wind.loadTexture("img/pl/right/attack0R.png"));
-	game.AttackRAnim.push_back(wind.loadTexture("img/pl/right/attack1R.png"));
-	game.AttackRAnim.push_back(wind.loadTexture("img/pl/right/a2R.png"));
-	game.AttackRAnim.push_back(wind.loadTexture("img/pl/right/attack3R.png"));
-	game.AttackRAnim.push_back(wind.loadTexture("img/pl/right/attack1R.png"));	
-	game.AttackRAnim.push_back(wind.loadTexture("img/pl/right/attack3R.png"));
-// Load the player attacking to the left animation textures
-	game.AttackLAnim.push_back(wind.loadTexture("img/pl/left/attack0L.png"));
-	game.AttackLAnim.push_back(wind.loadTexture("img/pl/left/attack01L.png"));
-	game.AttackLAnim.push_back(wind.loadTexture("img/pl/left/attack02L.png"));
-	game.AttackLAnim.push_back(wind.loadTexture("img/pl/left/attack03L.png"));
-	game.AttackLAnim.push_back(wind.loadTexture("img/pl/left/attack04L.png"));
-
-// Load the player healthbar
-	game.HealthBar.push_back(wind.loadTexture("img/bg/health_ui0H.png"));	
-	game.HealthBar.push_back(wind.loadTexture("img/bg/health_ui1H.png"));
-	game.HealthBar.push_back(wind.loadTexture("img/bg/health_ui2H.png"));
-	game.HealthBar.push_back(wind.loadTexture("img/bg/health_ui3H.png"));
-	game.HealthBar.push_back(wind.loadTexture("img/bg/health_ui4H.png"));
-	game.HealthBar.push_back(wind.loadTexture("img/bg/health_ui.png"));
-//Load heavy strike
-	game.Heavy.push_back(wind.loadTexture("img/pl/right/attack00R.png"));
-	game.Heavy.push_back(wind.loadTexture("img/pl/right/Charge0.png"));
-	game.Heavy.push_back(wind.loadTexture("img/pl/right/Charge1.png"));
-	game.Heavy.push_back(wind.loadTexture("img/pl/right/attack01R.png"));
-	game.Heavy.push_back(wind.loadTexture("img/pl/right/attack01R.png"));
-	game.Heavy.push_back(wind.loadTexture("img/pl/right/CHARGE4.png"));
-	game.Heavy.push_back(wind.loadTexture("img/pl/right/CHARGE4.png"));
-	game.Heavy.push_back(wind.loadTexture("img/pl/right/CHARGE4.png"));
-	game.Heavy.push_back(wind.loadTexture("img/pl/right/CHARGE5.png"));
-	game.Heavy.push_back(wind.loadTexture("img/pl/right/CHARGE5.png"));
-	game.Heavy.push_back(wind.loadTexture("img/pl/right/CHARGE6.png"));
-//LOAD heave LEFT strike
-	game.HeavyL.push_back(wind.loadTexture("img/pl/left/attack00L.png"));
-	game.HeavyL.push_back(wind.loadTexture("img/pl/left/Charge0L.png"));
-	game.HeavyL.push_back(wind.loadTexture("img/pl/left/Charge1L.png"));
-	game.HeavyL.push_back(wind.loadTexture("img/pl/left/attack01L.png"));
-	game.HeavyL.push_back(wind.loadTexture("img/pl/left/attack01L.png"));
-	game.HeavyL.push_back(wind.loadTexture("img/pl/left/CHARGE4L.png"));
-	game.HeavyL.push_back(wind.loadTexture("img/pl/left/CHARGE4L.png"));
-	game.HeavyL.push_back(wind.loadTexture("img/pl/left/CHARGE4L.png"));
-	game.HeavyL.push_back(wind.loadTexture("img/pl/left/CHARGE5L.png"));
-	game.HeavyL.push_back(wind.loadTexture("img/pl/left/CHARGE5L.png"));
-	game.HeavyL.push_back(wind.loadTexture("img/pl/left/CHARGE6L.png"));
-//LOAD torch prop
-	game.TorchAnim.push_back(wind.loadTexture("img/props/torch0.png"));
-	game.TorchAnim.push_back(wind.loadTexture("img/props/torch1.png"));
-	game.TorchAnim.push_back(wind.loadTexture("img/props/torch2.png"));
-	game.TorchAnim.push_back(wind.loadTexture("img/props/torch3.png"));
-	game.TorchAnim.push_back(wind.loadTexture("img/props/torch4.png"));
-	game.TorchAnim.push_back(wind.loadTexture("img/props/torch5.png"));
-// LOAD varie Props
-	game.Props.push_back(wind.loadTexture("img/props/prisoner.png"));
-	game.Props.push_back(wind.loadTexture("img/props/table.png"));
-	game.Props.push_back(wind.loadTexture("img/props/barrel.png"));
-
-
-
-// LOAD Explosion
-	game.Explosion.push_back(wind.loadTexture("img/effects/destroy/ex0.png"));
-	game.Explosion.push_back(wind.loadTexture("img/effects/destroy/ex1.png"));
-	game.Explosion.push_back(wind.loadTexture("img/effects/destroy/ex2.png"));
-	game.Explosion.push_back(wind.loadTexture("img/effects/destroy/ex3.png"));
-	game.Explosion.push_back(wind.loadTexture("img/effects/destroy/ex4.png"));
-	game.Explosion.push_back(wind.loadTexture("img/effects/destroy/ex5.png"));
-	game.Explosion.push_back(wind.loadTexture("img/effects/destroy/ex6.png"));
-// LOAD flying enemy RIGHT
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly0R.png"));
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly0R.png"));
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly0R.png"));
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly0R.png"));
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly0R.png"));
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly1R.png"));
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly1R.png"));
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly1R.png"));
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly1R.png"));
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly1R.png"));	
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly2R.png"));
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly2R.png"));
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly2R.png"));
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly2R.png"));		
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly2R.png"));
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly3R.png"));
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly3R.png"));
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly3R.png"));
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly3R.png"));
-	game.FlyingEnR.push_back(wind.loadTexture("img/enemy/flying/right/fly3R.png"));
-// LOAD flying enemy LEFT
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly0L.png"));
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly0L.png"));
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly0L.png"));
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly0L.png"));
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly0L.png"));
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly1L.png"));
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly1L.png"));
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly1L.png"));
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly1L.png"));
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly1L.png"));
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly2L.png"));
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly2L.png"));
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly2L.png"));	
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly2L.png"));	
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly2L.png"));
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly3L.png"));
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly3L.png"));
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly3L.png"));
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly3L.png"));
-	game.FlyingEnL.push_back(wind.loadTexture("img/enemy/flying/left/fly3L.png"));
-	// Enemy dying text
-	game.FlyDeath.push_back(wind.loadTexture("img/enemy/dying0.png"));
-	game.FlyDeath.push_back(wind.loadTexture("img/enemy/dying0.png"));
-	game.FlyDeath.push_back(wind.loadTexture("img/enemy/dying0.png"));
-	game.FlyDeath.push_back(wind.loadTexture("img/enemy/dying1.png"));
-	game.FlyDeath.push_back(wind.loadTexture("img/enemy/dying1.png"));
-	game.FlyDeath.push_back(wind.loadTexture("img/enemy/dying1.png"));		
-	game.FlyDeath.push_back(wind.loadTexture("img/enemy/dying2.png"));
-	game.FlyDeath.push_back(wind.loadTexture("img/enemy/dying2.png"));
-	game.FlyDeath.push_back(wind.loadTexture("img/enemy/dying2.png"));	
-	//Locked Door
-	door1.DoorLocked.push_back(wind.loadTexture("img/bg/door/door0.png"));
-	door1.DoorLocked.push_back(wind.loadTexture("img/bg/door/door1.png"));
-	door1.DoorLocked.push_back(wind.loadTexture("img/bg/door/door2.png"));
-	door1.DoorLocked.push_back(wind.loadTexture("img/bg/door/door3.png"));
-	door1.DoorLocked.push_back(wind.loadTexture("img/bg/door/door4.png"));
-	door1.DoorLocked.push_back(wind.loadTexture("img/bg/door/door5.png"));
-	door1.DoorLocked.push_back(wind.loadTexture("img/bg/door/door6.png"));		
-
-	// STARTING WEAPON TO CHOOSE FROM
-	game.base_sword = wind.loadTexture("img/weapons/sword_base.png");	
-	game.base_wand = wind.loadTexture("img/weapons/wand_base.png");
-
-	//LOAD CHEST text
-	chest1.ChestClosed.push_back(wind.loadTexture("img/props/chest/chest_closed0.png"));									
-	chest1.ChestClosed.push_back(wind.loadTexture("img/props/chest/chest_closed1.png"));
-	chest1.ChestClosed.push_back(wind.loadTexture("img/props/chest/chest_closed2.png"));
-	chest1.ChestClosed.push_back(wind.loadTexture("img/props/chest/chest_closed3.png"));
-	chest1.ChestClosed.push_back(wind.loadTexture("img/props/chest/chest_closed4.png"));
-	chest1.ChestClosed.push_back(wind.loadTexture("img/props/chest/chest_closed5.png"));
-	chest1.ChestClosed.push_back(wind.loadTexture("img/props/chest/chest_closed6.png"));
-	chest1.ChestClosed.push_back(wind.loadTexture("img/props/chest/chest_closed7.png"));
-	chest1.ChestClosed.push_back(wind.loadTexture("img/props/chest/chest_open.png"));
-
-	// UI TEXT
-	game.firstSwordMSG = wind.loadTexture("img/UI/SwordChoice.png");
-	game.firstWandMSG = wind.loadTexture("img/UI/WandChoice.png");
-	game.AcceptW = wind.loadTexture("img/UI/AcceptWeapon.png");
-	game.RefuseW = wind.loadTexture("img/UI/RefuseWeapon.png");
-
-
-	//SMOKE EFFECT
-	game.Smoke.push_back(wind.loadTexture("img/effects/smoke/Smoke1.png"));
-	game.Smoke.push_back(wind.loadTexture("img/effects/smoke/Smoke2.png"));
-	game.Smoke.push_back(wind.loadTexture("img/effects/smoke/Smoke3.png"));
-	game.Smoke.push_back(wind.loadTexture("img/effects/smoke/Smoke4.png"));
-	game.Smoke.push_back(wind.loadTexture("img/effects/smoke/Smoke5.png"));
-	game.Smoke.push_back(wind.loadTexture("img/effects/smoke/Smoke6.png"));
-	game.Smoke.push_back(wind.loadTexture("img/effects/smoke/Smoke7.png"));
-	game.Smoke.push_back(wind.loadTexture("img/effects/smoke/Smoke8.png"));
-	game.Smoke.push_back(wind.loadTexture("img/effects/smoke/Smoke9.png"));
-	game.Smoke.push_back(wind.loadTexture("img/effects/smoke/Smoke10.png"));
-	game.Smoke.push_back(wind.loadTexture("img/effects/smoke/Smoke11.png"));
-	game.Smoke.push_back(wind.loadTexture("img/effects/smoke/Smoke12.png"));
-	game.Smoke.push_back(wind.loadTexture("img/effects/smoke/Smoke13.png"));
-	game.Smoke.push_back(wind.loadTexture("img/effects/smoke/Smoke14.png"));
-	game.Smoke.push_back(wind.loadTexture("img/effects/smoke/Smoke15.png"));
-	game.Smoke.push_back(wind.loadTexture("img/effects/smoke/Smoke16.png"));
-	game.Smoke.push_back(wind.loadTexture("img/effects/smoke/Smoke17.png"));
-	game.Smoke.push_back(wind.loadTexture("img/effects/smoke/Smoke18.png"));
-	game.Smoke.push_back(wind.loadTexture("img/effects/smoke/Smoke19.png"));
-
-	// Green SMoke
-	game.SmokeG.push_back(wind.loadTexture("img/effects/smokegreen/Poison Cloud1.png"));
-	game.SmokeG.push_back(wind.loadTexture("img/effects/smokegreen/Poison Cloud2.png"));
-	game.SmokeG.push_back(wind.loadTexture("img/effects/smokegreen/Poison Cloud3.png"));
-	game.SmokeG.push_back(wind.loadTexture("img/effects/smokegreen/Poison Cloud4.png"));
-	game.SmokeG.push_back(wind.loadTexture("img/effects/smokegreen/Poison Cloud5.png"));
-	game.SmokeG.push_back(wind.loadTexture("img/effects/smokegreen/Poison Cloud6.png"));
-	game.SmokeG.push_back(wind.loadTexture("img/effects/smokegreen/Poison Cloud7.png"));
-	game.SmokeG.push_back(wind.loadTexture("img/effects/smokegreen/Poison Cloud8.png"));
-	game.SmokeG.push_back(wind.loadTexture("img/effects/smokegreen/Poison Cloud9.png"));
-	game.SmokeG.push_back(wind.loadTexture("img/effects/smokegreen/Poison Cloud10.png"));
-	game.SmokeG.push_back(wind.loadTexture("img/effects/smokegreen/Poison Cloud11.png"));
-	game.SmokeG.push_back(wind.loadTexture("img/effects/smokegreen/Poison Cloud12.png"));
-	game.SmokeG.push_back(wind.loadTexture("img/effects/smokegreen/Poison Cloud13.png"));
-	game.SmokeG.push_back(wind.loadTexture("img/effects/smokegreen/Poison Cloud14.png"));
-	game.SmokeG.push_back(wind.loadTexture("img/effects/smokegreen/Poison Cloud15.png"));
-	game.SmokeG.push_back(wind.loadTexture("img/effects/smokegreen/Poison Cloud16.png"));
-	game.SmokeG.push_back(wind.loadTexture("img/effects/smokegreen/Poison Cloud17.png"));
-	game.SmokeG.push_back(wind.loadTexture("img/effects/smokegreen/Poison Cloud18.png"));
-	game.SmokeG.push_back(wind.loadTexture("img/effects/smokegreen/Poison Cloud19.png"));
-
-	//SPrinkles
-	game.Sprinkle.push_back(wind.loadTexture("img/effects/sprinkle/sprinkle1.png"));
-	game.Sprinkle.push_back(wind.loadTexture("img/effects/sprinkle/sprinkle2.png"));
-	game.Sprinkle.push_back(wind.loadTexture("img/effects/sprinkle/sprinkle3.png"));
-	game.Sprinkle.push_back(wind.loadTexture("img/effects/sprinkle/sprinkle4.png"));
-
-	//Weapons sword notice
-	game.RecRustySword = wind.loadTexture("img/UI/RustySwordNotice.png");
-	game.RecOldRod = wind.loadTexture("img/UI/OldRodNotice.png");	
-
-	//Rusty sword overhead
-	game.RoverR = wind.loadTexture("img/weapons/Rusty_Sword/rusty1.png");
-	game.RoverL = wind.loadTexture("img/weapons/Rusty_Sword/rusty2.png");
-
-	// MAgick 1 anim right
-	game.MagickAnimR.push_back(wind.loadTexture("img/pl/right/AttackWand0R.png"));
-	game.MagickAnimR.push_back(wind.loadTexture("img/pl/right/AttackWand1R.png"));
-	game.MagickAnimR.push_back(wind.loadTexture("img/pl/right/AttackWand2R.png"));		
-	game.MagickAnimR.push_back(wind.loadTexture("img/pl/right/magick_base/spark-preview1.png"));
-	game.MagickAnimR.push_back(wind.loadTexture("img/pl/right/magick_base/spark-preview2.png"));
-	game.MagickAnimR.push_back(wind.loadTexture("img/pl/right/magick_base/spark-preview3.png"));
-	game.MagickAnimR.push_back(wind.loadTexture("img/pl/right/magick_base/spark-preview4.png"));
-	game.MagickAnimR.push_back(wind.loadTexture("img/pl/right/magick_base/hits-3-1.png"));
-	game.MagickAnimR.push_back(wind.loadTexture("img/pl/right/magick_base/hits-3-2.png"));
-	game.MagickAnimR.push_back(wind.loadTexture("img/pl/right/magick_base/hits-3-3.png"));
-	game.MagickAnimR.push_back(wind.loadTexture("img/pl/right/magick_base/hits-3-4.png"));
-	game.MagickAnimR.push_back(wind.loadTexture("img/pl/right/magick_base/hits-3-5.png"));
-	
-	
 
 
 	int totx = (640 * 2) / 64;
@@ -1670,40 +1731,48 @@ static int TorchFrame;
 
 while (running)
 {
-int startTicks = SDL_GetTicks();
-float newTime = utils::hireTimeInSeconds();
-float frameTime = newTime - currentTime;
-currentTime = newTime;
-accumulator += frameTime;
-if (frameTime > 0.25f)
-	frameTime = 0.25f;
+    int startTicks = SDL_GetTicks();
+    float newTime = utils::hireTimeInSeconds();
+    float frameTime = newTime - currentTime;
+    currentTime = newTime;
+    accumulator += frameTime;
+    if (frameTime > 0.25f)
+        frameTime = 0.25f;
 
-while (accumulator >= timeStep)
-{
-	while (SDL_PollEvent(&event))
-	{
-		if (event.type == SDL_QUIT)
-			running = false;
+    while (accumulator >= timeStep)
+    {
+        while (SDL_PollEvent(&event))
+        {
+            if (event.type == SDL_QUIT)
+                running = false;
 
-		if (event.type == SDL_KEYDOWN)
-		{
-			if (!game.chest2.attack)
-				manageKEYBOARD(&event.key, &wind, &game, animationSpeed, chest1, currentTexture);
-		}
-		if (event.type == SDL_KEYUP)
-		{
-			manageKEYBOARD(&event.key, &wind, &game, animationSpeed, chest1, currentTexture);
-		}
-	}
-	accumulator -= timeStep;
-}
+            if (event.type == SDL_KEYDOWN && !game.demo_end)
+            {
+                if (!game.chest2.attack)
+                    manageKEYBOARD(&event.key, &wind, &game, animationSpeed, chest1, currentTexture, slowText, door1);
+            }
+            if (event.type == SDL_KEYUP)
+            {
+                manageKEYBOARD(&event.key, &wind, &game, animationSpeed, chest1, currentTexture, slowText, door1);
+            }
+        }
+        accumulator -= timeStep;
+    }
 
-const float alpha = accumulator / timeStep;
-wind.clear();
-currentTexture = Animations(currentTexture, &game, currentFrame, animationSpeed);
-wind.drawMap(p, wind);
-renderThings(&game, TorchFrame, currentTexture, &wind, currentFrame, door1, chest1, &event.key);
-checkForEvents(&game, &wind, animationSpeed, currentTexture);
+
+    const float alpha = accumulator / timeStep;
+    wind.clear();
+
+    // Aggiorna e disegna il testo lento se c'è testo da mostrare
+
+
+    currentTexture = Animations(currentTexture, &game, currentFrame, animationSpeed);
+    wind.drawMap(p, wind);
+    renderThings(&game, TorchFrame, currentTexture, &wind, currentFrame, door1, chest1, &event.key, slowText);
+    
+	if (!game.demo_end)
+		checkForEvents(&game, &wind, animationSpeed, currentTexture);
+
 	
 	// QUICKATTACK & PRESSEDATTACK LOGIC
 
@@ -1712,7 +1781,7 @@ if (game.Sattack && !game.running && !game.moveDown && !game.moveLeft && !game.m
 	if (!game.left)
 	{
 		currentTexture = game.AttackRAnim[AtFr];
-		wind.renderTexture(currentTexture, game.pposx + (currentFrame * 2 + 80),  game.pposy + (currentFrame + 3), false);
+		wind.renderTexture(currentTexture, game.pposx + (currentFrame * 2 + 80),  game.pposy + (currentFrame + 3), false, &game);
 
 		vector<int>::iterator i = game.FlyPosx.begin();
 		vector<int>::iterator it = game.FlyPosy.begin();
@@ -1752,7 +1821,7 @@ if (game.Sattack && !game.running && !game.moveDown && !game.moveLeft && !game.m
 			else
 			game.BatD = false;
 		}
-		wind.renderTexture(currentTexture, game.pposx - (currentFrame * 2 + 66),  game.pposy - (currentFrame - 9), false);
+		wind.renderTexture(currentTexture, game.pposx - (currentFrame * 2 + 66),  game.pposy - (currentFrame - 9), false, &game);
 		AtFrl++;
 		if (AtFrl == 5)
 			AtFrl = 2;
@@ -1768,7 +1837,7 @@ if (game.Release && game.idle && game.W_equipped)
 	{
 		game.CurrentAttack = true;
 		currentTexture = game.Heavy[AtFrR];
-		wind.renderTexture(currentTexture, game.pposx + (AtFrR  * 2 + 128), game.pposy + (AtFrR  - 23), false);
+		wind.renderTexture(currentTexture, game.pposx + (AtFrR  * 2 + 128), game.pposy + (AtFrR  - 23), false, &game);
 		AtFrR++;
 		if (AtFrR == 11)
 		{
@@ -1782,7 +1851,7 @@ if (game.Release && game.idle && game.W_equipped)
 	{	
 		game.CurrentAttack = true;
 		currentTexture = game.HeavyL[AtFrLL];
-		wind.renderTexture(currentTexture, game.pposx -(AtFrLL * 2  + 128), game.pposy + (AtFrLL * 2 - 23), false);
+		wind.renderTexture(currentTexture, game.pposx -(AtFrLL * 2  + 128), game.pposy + (AtFrLL * 2 - 23), false, &game);
 		AtFrLL++;
 		if (AtFrLL == 11)
 		{
@@ -1793,6 +1862,140 @@ if (game.Release && game.idle && game.W_equipped)
 	}
 
 }
+if (game.Release_Wand && game.idle && game.chest2.W_equipped)
+{
+	static Projectile p;
+	static bool launched = false;
+	static int frames = 0;
+
+	frames++;
+
+	if (!launched)
+	{
+		p.x = game.pposx;
+		p.y = game.pposy;
+		p.frame = 0;
+		p.hit = false;
+		p.frameDelay = 0;
+		p.cast = 0;
+		p.directionRight = !game.left;
+
+		launched = true;
+		game.CurrentAttack = true;
+	}
+
+	int px = p.x + p.cast;
+	int py = p.y + 10;
+
+	if (!p.hit)
+	{
+		int totx = 640 * 2;
+		int toty = 480 * 2;
+
+		bool hitWall = (px < 0 || px >= totx - 120 || py < 0 || py > toty);
+
+		bool chest1Closed = !game.chest1open && (px >= 300 && px <= 400 && py >= 350 && py <= 435);
+		bool chest2Closed = !game.chest2.isOpen() && (px >= 500 && px <= 600 && py >= 350 && py <= 435);
+
+		for (auto it = game.PropPos.begin(); it != game.PropPos.end(); ++it)
+		{	
+			if (!it->second)
+			{
+				int posx = it->first;
+				int posy = posx; 
+
+				int width = 64;
+				int height = 128;
+
+
+				bool hitProp = (px >= posx - width / 2 && px <= posx + width / 2 &&
+								py >= posy - height / 2 && py <= posy + height / 2);
+
+				if (hitProp)
+				{
+					p.hit = true;
+					p.frame = 0;
+					p.frameDelay = 0;
+					game.destroyed = true;
+					game.PropToDes = it->first;
+					it->second = true;
+					break;
+				}
+			}
+		}
+
+
+
+
+		
+
+		bool hitFly = false;
+		for (size_t i = 0; i < game.FlyPosx.size(); i++)
+		{
+			int flyx = game.FlyPosx[i];
+			int flyy = game.FlyPosy[i];
+			if (abs(px - flyx) <= 20 && abs(py - flyy) <= 20)
+			{
+				hitFly = true;
+				game.FlyLightHit = true;
+				break;
+			}
+		}
+
+		if (hitWall || chest1Closed || chest2Closed || hitFly)
+		{
+			p.hit = true;
+			p.frame = 0;
+			p.frameDelay = 0;
+		}
+	}
+
+	wind.renderTexture(game.MagickAnimR[2], game.pposx, game.pposy, game.left, &game);
+
+	if (!p.hit)
+	{
+		int animFrame = std::min(p.frame, 24);
+		if (!game.left)
+			wind.renderTexture(game.Projectile_Heavy[animFrame], px - 30, py - 100, !p.directionRight, &game, 2, 2);
+		else
+			wind.renderTexture(game.Projectile_Heavy[animFrame], px - 30, py - 100, !p.directionRight, &game, 2, 2);
+	}
+	else
+	{
+		int animFrame = std::min(p.frame, 11);
+		if (!game.left)
+			wind.renderTexture(game.Heavy_Explosion[animFrame], px - 64, py - 170, false, &game, 2, 2);
+		else
+			wind.renderTexture(game.Heavy_Explosion[animFrame], px - 64, py - 170, false, &game, 2, 2);
+	}
+
+	p.frameDelay++;
+	if (p.frameDelay >= 2)
+	{
+		p.frame++;
+		p.frameDelay = 0;
+	}
+
+	if (!p.hit)
+		p.cast += p.directionRight ? 25 : -25;
+
+	if (p.cast > 1600 || p.cast < -1600 || (p.hit && p.frame > 11))
+	{
+		launched = false;
+		game.Release_Wand = false;
+		game.CurrentAttack = false;
+	}
+
+	game.Hattak2_Wand = false;
+}
+
+
+	if ((!slowText.fullText.empty() && slowText.shouldRender))
+    {
+        updateSlowText(renderer, font, slowText);
+        renderSlowText(renderer, slowText, 400, 500);
+    }
+    SDL_RenderPresent(renderer);
 
 
 	wind.display();

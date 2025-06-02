@@ -3,6 +3,8 @@
 #include <chrono>
 using namespace std;
 
+
+
 Render::Render(const char * p_title, int p_w, int p_h) : window(NULL), renderer(NULL), buffer1(NULL), buffer2(NULL)
 {
 	window = SDL_CreateWindow(p_title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, p_w, p_h, SDL_WINDOW_SHOWN);
@@ -71,24 +73,41 @@ void Render::render(Entity &en)
 	SDL_RenderCopy(renderer, en.getTex(), &src, &dst);
 }
 
-void Render::renderTexture(SDL_Texture* texture, int x, int y, bool left)
-{
+void Render::renderTexture(SDL_Texture* texture, int x, int y, bool left, game* info) {
+    renderTexture(texture, x, y, left, info, 1.0f, 1.0f);
+}
+
+SDL_Renderer* Render::getRenderer() {
+    return renderer;
+}
+
+SDL_Texture* Render::getCurrentBuffer() {
+    return currentBuffer;
+}
+
+
+void Render::renderTexture(SDL_Texture* texture, int x, int y, bool left, game* info, float scaleX, float scaleY) {
+    info->lastTextureRendered = texture;
+
     SDL_Rect destRect;
     destRect.x = x;
     destRect.y = y;
-    
 
-    SDL_QueryTexture(texture, NULL, NULL, &destRect.w, &destRect.h);
-	if (left)
-	{
-		SDL_RenderCopyEx(renderer, texture, NULL, &destRect, 0, NULL, SDL_FLIP_HORIZONTAL);
-	}
-	else
-	{
-		SDL_RenderCopy(renderer, texture, NULL, &destRect);
-	}
+    int originalW, originalH;
+    SDL_QueryTexture(texture, NULL, NULL, &originalW, &originalH);
+
+    destRect.w = static_cast<int>(originalW * scaleX);
+    destRect.h = static_cast<int>(originalH * scaleY);
+
+    if (left)
+        SDL_RenderCopyEx(renderer, texture, NULL, &destRect, 0, NULL, SDL_FLIP_HORIZONTAL);
+    else
+        SDL_RenderCopy(renderer, texture, NULL, &destRect);
+
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 }
+
+
 
 void Render::display()
 {
