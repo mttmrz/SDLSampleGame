@@ -38,7 +38,7 @@ On **Ubuntu**, simply run `make && ./ELPEPE` from the project root.
 Enjoy!
 
 ---
- ![Img](./src/sword.png)  
  ![Img](./src/floor_sword.png)  
+ ![Img](./src/sword.png)  
 **Note:** Back when I first developed this project, artificial intelligence wasn’t part of the picture yet.
 P.s this is mostly written in std:98 
