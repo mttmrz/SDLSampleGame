@@ -1,13 +1,39 @@
-# SDLSampleGame
-A small intro to a SDL game in c++
+
+ELPEPE - A Little Self-Taught C++ Project
+This is a small, somewhat self-taught project I made during my early days of learning C++ programming.
+It’s full of hardcoded stuff, endless and not-so-optimized code streams, and probably quite a few bugs —
+but it was a lot of fun to create!
+
+I used the famous SDL library, well known in the game development world.
+Some notable games made with SDL include:
 
 
-To play :
-type make inside the current folder, than ./ELPEPE (linux)
+Terraria
+![Img](./src/terraria.jpeg)
+Super Meat Boy
+![Img](./src/meatboy.png)
 
-move the player with wasd keys, the UI selections with arrows (<- & ->).
-Once you have a weapon equipped, Q and SPACE to perform the two possible attacks.
+Celeste
+![Img](./src/celeste.jpeg)
 
-NOTE: i made this game with the intent of studying the SDL library , which was used to make a lot of games in the past (e.g METAL SLUG)
-the game it's just a preview , and it has no serious implementation. i used sprites found on the internet (primarly on itch.io) , and i modified them to serve a purpose in my game.
-Enjoy
+This is just a small demo. I tried to make it runnable on both Windows and Ubuntu.
+
+On Windows, run the script setup_and_run with administrator privileges.
+
+On Ubuntu, simply run make && ./ELPEPE from the project root.
+
+
+Controls:
+WASD to move around
+
+Spacebar to attack
+
+Q for heavy attack
+
+E to interact
+
+Esc to exit
+
+Enjoy!
+
+Note: Back when I first developed this project, artificial intelligence wasn’t part of the picture yet.
