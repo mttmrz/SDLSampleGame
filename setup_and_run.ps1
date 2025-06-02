@@ -26,11 +26,12 @@ foreach ($pkg in @("mingw", "make")) {
 $baseDir = $PSScriptRoot
 $dlls = @("SDL2.dll", "SDL2_image.dll")
 $outputExe = Join-Path $baseDir "game.exe"
-$sourceFiles = @("main.cpp", "Entity.cpp", "game.cpp") | ForEach-Object { "`"$baseDir\$_`"" }
+$sourceFiles = @("main.cpp", "Entity.cpp", "game.cpp", "texture_loader.cpp") | ForEach-Object { "`"$baseDir\$_`"" }
 
 # 4. Compilazione: include e lib sono nella stessa cartella (.) dove sono gli header SDL2 (SDL2/SDL.h)
 # Usa -I"." per indicare la cartella corrente (che è $baseDir)
-$compileCmd = "g++ $($sourceFiles -join ' ') -I`"$baseDir`" -L`"$baseDir`" -lmingw32 -lSDL2main -lSDL2 -lSDL2_image -mwindows -o `"$outputExe`""
+$compileCmd = "g++ $($sourceFiles -join ' ') -I`"$baseDir`" -I`"$baseDir\SDL2`" -L`"$baseDir`" -lmingw32 -lSDL2main -lSDL2 -lSDL2_image -lSDL2_ttf -mwindows -o `"$outputExe`""
+
 
 Write-Host "Compilo con:"
 Write-Host $compileCmd
