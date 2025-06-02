@@ -38,6 +38,7 @@ make && ./ELPEPE
 | **Spacebar** | Basic attack |
 | **Q** | Heavy attack |
 | **E** | Interact with objects |
+| **SHIFT** | Run |
 | **Esc** | Exit game |
 
 ### Gameplay Preview
