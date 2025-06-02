@@ -29,12 +29,16 @@ On **Ubuntu**, simply run `make && ./ELPEPE` from the project root.
 - **WASD** to move around  
  ![WASD](./src/gif1.gif)
 - **Spacebar** to attack  
-- **Q** for heavy attack  
-- **E** to interact  
+- **Q** for heavy attack
+ ![HEAVY](./src/gif2.gif)
+- **E** to interact 
+ ![Img](./src/select.png)  
 - **Esc** to exit  
 
 Enjoy!
 
 ---
-
+ ![Img](./src/sword.png)  
+ ![Img](./src/floor_sword.png)  
 **Note:** Back when I first developed this project, artificial intelligence wasn’t part of the picture yet.
+P.s this is mostly written in std:98 
