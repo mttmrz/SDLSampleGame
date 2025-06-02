@@ -41,6 +41,7 @@ Enjoy!
  ![Img](./src/floor_sword.png)  
  ![Img](./src/sword.png)  
 --
-**Note:** Back when I first developed this project, artificial intelligence wasn’t part of the picture yet.
+--
+-- **Note:** Back when I first developed this project, artificial intelligence wasn’t part of the picture yet.
 --
 ** P.s ** this is mostly written in std:98 
