@@ -20,7 +20,7 @@ This project leverages the Simple DirectMedia Layer (SDL), a powerful cross-plat
 ## Installation & Setup
 
 ### Windows
-Run the `setup_and_run` script with administrator privileges:
+Run the `setup_and_run.ps1` script with administrator privileges:
 ```bash
 # Right-click on setup_and_run and select "Run as administrator"
 ```
